@@ -188,9 +188,13 @@ function renderWorkflowTasks(data) {
     : 'No task selected.';
 
   const output = document.getElementById('workflowOutput');
+  const resultPreview = task?.handoff?.resultPreview;
+  const resultBlock = resultPreview
+    ? `<div class="note"><strong>Completed task result</strong>\n\n${escapeHtml(resultPreview.slice(0, 2000))}</div>`
+    : '';
   output.innerHTML = task?.logs?.length
-    ? task.logs.map(line => `<div class="log-line log-${escapeHtml(line.type || 'info')}"><span class="log-time">${new Date(line.at).toLocaleTimeString()}</span>${escapeHtml(line.message)}</div>`).join('')
-    : '<div class="small">No output yet for this task.</div>';
+    ? `${resultBlock}${task.logs.map(line => `<div class="log-line log-${escapeHtml(line.type || 'info')}\"><span class="log-time">${new Date(line.at).toLocaleTimeString()}</span>${escapeHtml(line.message)}</div>`).join('')}`
+    : (resultBlock || '<div class="small">No output yet for this task.</div>');
 
   const qaBody = document.getElementById('workflowQaBody');
   if (!task?.questions?.length) {
@@ -545,5 +549,8 @@ async function main() {
 window.submitWorkflowTask = submitWorkflowTask;
 
 main().catch(error => {
+  setGlobalStatus(`Startup failed: ${error.message}`);
+});
+ch(error => {
   setGlobalStatus(`Startup failed: ${error.message}`);
 });
