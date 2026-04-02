@@ -189,12 +189,24 @@ function renderWorkflowTasks(data) {
 
   const output = document.getElementById('workflowOutput');
   const resultPreview = task?.handoff?.resultPreview;
-  const resultBlock = resultPreview
-    ? `<div class="note"><strong>Completed task result</strong>\n\n${escapeHtml(resultPreview.slice(0, 2000))}</div>`
-    : '';
+  let renderedResult = '';
+  if (resultPreview) {
+    let pretty = resultPreview;
+    try {
+      const parsed = JSON.parse(resultPreview);
+      if (parsed?.payload?.output_text) {
+        pretty = parsed.payload.output_text;
+      } else if (parsed?.payload?.output) {
+        pretty = JSON.stringify(parsed.payload.output, null, 2);
+      } else {
+        pretty = JSON.stringify(parsed, null, 2);
+      }
+    } catch {}
+    renderedResult = `<div class="note"><strong>Completed task result</strong>\n\n${escapeHtml(pretty.slice(0, 3000))}</div>`;
+  }
   output.innerHTML = task?.logs?.length
-    ? `${resultBlock}${task.logs.map(line => `<div class="log-line log-${escapeHtml(line.type || 'info')}\"><span class="log-time">${new Date(line.at).toLocaleTimeString()}</span>${escapeHtml(line.message)}</div>`).join('')}`
-    : (resultBlock || '<div class="small">No output yet for this task.</div>');
+    ? `${renderedResult}${task.logs.map(line => `<div class="log-line log-${escapeHtml(line.type || 'info')}\"><span class="log-time">${new Date(line.at).toLocaleTimeString()}</span>${escapeHtml(line.message)}</div>`).join('')}`
+    : (renderedResult || '<div class="small">No output yet for this task.</div>');
 
   const qaBody = document.getElementById('workflowQaBody');
   if (!task?.questions?.length) {
