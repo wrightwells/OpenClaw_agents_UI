@@ -26,8 +26,14 @@ const WORKFLOW_HOOK = path.join(DEV_CONTEXT_ROOT, 'hooks', 'submit-workflow-task
 const WORKFLOW_TASKS_ROOT = path.join(DEV_CONTEXT_ROOT, 'workflow-tasks');
 const AGENT_ORDER = ['main', 'alpha', 'delta', 'charlie', 'tango', 'romeo', 'india'];
 
+app.use((req, res, next) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  next();
+});
 app.use(express.json({ limit: '2mb' }));
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), { etag: false, lastModified: false }));
 
 function readJsonSafe(filePath, fallback = {}) {
   try {
