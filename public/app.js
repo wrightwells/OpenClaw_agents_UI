@@ -459,6 +459,26 @@ async function copyPromptEditorKickoff() {
   setGlobalStatus('Prompt Editor kickoff prompt copied to clipboard');
 }
 
+async function savePromptEditorKickoff() {
+  const project = document.getElementById('promptProjectSelect')?.value;
+  const textarea = document.getElementById('promptKickoffText');
+  const status = document.getElementById('promptKickoffStatus');
+  if (!project) return window.alert('Select a project first.');
+  if (!textarea) return;
+  status.textContent = 'Saving kickoff prompt…';
+  try {
+    const result = await fetchJson(`/api/context-projects/${encodeURIComponent(project)}/docs/dev-workflow.md`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: textarea.value })
+    });
+    status.textContent = `Kickoff prompt saved at ${new Date(result.savedAt).toLocaleString()}`;
+  } catch (error) {
+    status.textContent = `Save failed: ${error.message}`;
+    window.alert(`Kickoff prompt save failed: ${error.message}`);
+  }
+}
+
 async function triggerRepoInit() {
   const project = document.getElementById('projectSelect').value || state.contextDocs?.selectedProject;
   if (!project) return window.alert('Select or create a project first.');

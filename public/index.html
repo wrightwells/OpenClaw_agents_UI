@@ -152,9 +152,11 @@
               <select id="promptProjectSelect" title="Choose which project context to use for the kickoff prompt."></select>
               <button id="generatePromptKickoffBtn" title="Generate the kickoff prompt for the selected project.">Generate prompt</button>
               <button id="copyPromptKickoffBtn" title="Copy the generated kickoff prompt to the clipboard.">Copy prompt</button>
+              <button id="savePromptKickoffBtn" title="Save the kickoff prompt back to the selected project's dev-workflow doc.">Save prompt</button>
             </div>
           </div>
-          <textarea id="promptKickoffText" readonly></textarea>
+          <textarea id="promptKickoffText"></textarea>
+          <div id="promptKickoffStatus" class="small"></div>
         </div>
 
         <div id="releaseStatus" class="note"></div>
