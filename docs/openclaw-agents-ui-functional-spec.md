@@ -4,10 +4,11 @@
 
 OpenClaw_agents_UI is a locally run web application for monitoring and maintaining a small OpenClaw multi-agent setup.
 
-The application must provide three main functions:
+The application must provide four main functions:
 1. A default dashboard showing per-agent usage/cost summaries over recent time windows.
 2. A prompt management page for editing agent prompt source files and releasing them to live OpenClaw workspaces.
 3. A runtime summary page showing current agent/runtime facts such as model assignment and other operational status details.
+4. A working-context page for browsing per-project continuity documents and creating/selecting project context workspaces.
 
 This specification is functional only. It defines user-visible behaviour, data expectations, constraints, and acceptance criteria. It does **not** prescribe implementation details such as framework, schema technology, or deployment internals.
 
@@ -17,7 +18,8 @@ This specification is functional only. It defines user-visible behaviour, data e
 
 ### In scope
 - A website that runs locally on the host machine.
-- Three pages with a persistent menu/navigation system.
+- Four pages with a persistent menu/navigation system.
+- A project-scoped local working-context folder structure under `~/.openclaw/dev-context/projects/`.
 - Read/write access to local project files required by the UI.
 - Local-only persistence for any application state, cached metrics, draft edits, or remembered preferences.
 - A top-level action to release prompt changes to live OpenClaw workspaces by invoking:
@@ -86,10 +88,11 @@ The operator/owner of the local OpenClaw installation.
 
 The application must provide:
 1. A local web UI with a menu system.
-2. Exactly three top-level pages.
+2. Exactly four top-level pages.
 3. Local persistence only.
 4. Safe handling of file edits and release actions.
-5. A consistent distinction between:
+5. Project-scoped working-context management under `~/.openclaw/dev-context/projects/`.
+6. A consistent distinction between:
    - actual measured values,
    - estimated values,
    - unavailable values.
@@ -98,11 +101,12 @@ The application must provide:
 
 ## 6. Navigation / Information Architecture
 
-The UI must expose three menu items that are always reachable:
+The UI must expose four menu items that are always reachable:
 
 1. **Dashboard** (default landing page)
 2. **Prompt Editor**
 3. **Runtime Summary**
+4. **Working Context**
 
 ### Navigation requirements
 - The menu must be visible on every page.
@@ -283,15 +287,18 @@ The UI must clearly distinguish between:
 A top-level action must be provided, labelled clearly, for example:
 - `Release to Live`
 - `Sync Prompt Templates to Live`
+- `Release to Live + Restart OpenClaw`
 
 This action must run:
 - `./scripts/sync-agent-prompts.sh`
+- then restart OpenClaw so the released prompt changes take effect in runtime
 
 ## 9.7 Release action functional requirements
 When triggered, the UI must:
 - indicate that a release is in progress
 - execute the sync script from the repo root context
-- capture success/failure outcome
+- restart OpenClaw after a successful sync
+- capture success/failure outcome for both sync and restart steps
 - show a human-readable result summary
 - show script output or a concise log excerpt
 - record the latest release timestamp and result in local persistence
@@ -306,6 +313,11 @@ If the release script fails, the UI must:
 - report failure clearly
 - not claim that prompts are live
 - preserve enough output for the operator to understand what failed
+
+If the sync succeeds but restart fails, the UI must:
+- report that prompt files were copied but runtime activation failed
+- preserve output from both steps
+- not present the release as fully successful
 
 ## 9.10 Optional but useful supporting indicators
 The page should also show:
@@ -361,7 +373,92 @@ Examples:
 
 ---
 
-## 11. Local Persistence Requirements
+## 11. Page 4 — Working Context
+
+## 11.1 Purpose
+Provide a project-aware view of local continuity documents so the operator can browse, create, seed, and activate working context for multiple projects without relying on ad hoc shell commands.
+
+## 11.2 Folder structure requirement
+The working context must move from a single flat doc set to a project-scoped structure rooted at:
+- `~/.openclaw/dev-context/projects/`
+
+Each project must have its own folder, for example:
+- `~/.openclaw/dev-context/projects/OpenClaw_agents_UI/`
+
+Within each project folder, the UI must support a `docs/` subfolder containing at minimum:
+- `current-status.md`
+- `decisions.md`
+- `next-steps.md`
+- `dev-workflow.md`
+
+The existing top-level docs may continue temporarily for backward compatibility, but project-scoped docs are the desired source of truth going forward.
+
+## 11.3 Project list behaviour
+The Working Context page must allow the operator to:
+- view available project names discovered under `~/.openclaw/dev-context/projects/`
+- choose an existing project
+- see that project's context docs
+- understand which project is currently selected in the UI session
+
+## 11.4 Create project behaviour
+The Working Context page must provide a way to enter a new project name and create a new project context structure.
+
+Creating a new project must:
+- validate and normalise the project name for safe folder creation
+- create the project folder under `~/.openclaw/dev-context/projects/<project-name>/`
+- create the standard `docs/` files for that project
+- provide success/failure feedback
+
+## 11.5 Create project repo handoff
+After a new project context is created, the product must support invoking **Alpha** to build/init the project repo under:
+- `~/srv/`
+
+This is a workflow requirement, not merely a static file-generation step.
+The UI must therefore be able to trigger an application-side workflow/handoff for project creation rather than only editing local markdown files.
+
+## 11.6 Seed from existing project behaviour
+When creating a new project context, the user must be able to optionally choose an existing project and copy its context docs into the new project structure.
+
+This feature exists to support bootstrapping a new effort from an existing context baseline rather than always starting from empty templates.
+
+The UI must:
+- offer a selectable list of existing projects as optional source templates
+- copy the chosen project's context docs into the new project's `docs/` folder
+- make it clear whether the new project was seeded from blank templates or copied from another project
+
+## 11.7 Context injection prompt
+The Working Context page must provide a button/action that injects or presents the correct kickoff prompt for the currently selected project context.
+
+The purpose of this action is to remove the need for the operator to manually run `~/.openclaw/dev-context/print-kickoff-prompt.sh` for every chat.
+
+At minimum, the UI must support:
+- generating the project-specific kickoff prompt text
+- presenting it in a form suitable for copy/paste or direct insertion into chat
+- ensuring the prompt references the selected project's context doc paths
+
+## 11.8 External helper script support
+The helper script:
+- `~/.openclaw/dev-context/print-kickoff-prompt.sh`
+
+must be updated so that a project name can be passed as an argument when used outside the web page.
+
+Expected behaviour:
+- if a project name is provided, print a kickoff prompt that references that project's context docs
+- if no project name is provided, print a sensible default prompt or usage guidance
+
+## 11.9 Read-only vs editable behaviour
+For the first release of this working-context expansion, it is acceptable for the Working Context page to prioritise:
+- project selection
+- project creation
+- project seeding/copying
+- project-specific kickoff-prompt injection
+- document viewing
+
+Direct editing of those docs inside the Working Context page is optional unless later requested.
+
+---
+
+## 12. Local Persistence Requirements
 
 ## 11.1 No external database
 The product must use local persistence only.
@@ -464,9 +561,10 @@ The feature is functionally acceptable when all of the following are true:
 
 ### 16.1 General
 - A locally run website exists.
-- It has exactly three top-level pages accessible via a visible menu.
+- It has exactly four top-level pages accessible via a visible menu.
 - The default page is the Dashboard.
 - No external database is required.
+- Project-scoped working context folders are supported under `~/.openclaw/dev-context/projects/`.
 
 ### 16.2 Dashboard
 - The Dashboard lists agents individually.
@@ -480,6 +578,7 @@ The feature is functionally acceptable when all of the following are true:
 - Each agent has its own Save/Update action.
 - Saving one agent updates only that agent’s template file.
 - A top-level release action exists and runs `./scripts/sync-agent-prompts.sh`.
+- The release flow restarts OpenClaw after successful sync.
 - The UI shows success/failure feedback for release.
 
 ### 16.4 Runtime Summary
@@ -487,7 +586,14 @@ The feature is functionally acceptable when all of the following are true:
 - It shows global runtime facts relevant to operator understanding.
 - Missing/unknown values are handled explicitly rather than silently omitted.
 
-### 16.5 Persistence
+### 16.5 Working Context
+- The Working Context page lists available projects from `~/.openclaw/dev-context/projects/`.
+- The user can create a new project context folder structure.
+- The user can optionally seed a new project from an existing project's docs.
+- The user can generate or inject a project-specific kickoff prompt from the UI.
+- `~/.openclaw/dev-context/print-kickoff-prompt.sh` accepts a project name argument.
+
+### 16.6 Persistence
 - Any required app state is stored locally.
 - Stored state remains available after app restart.
 
