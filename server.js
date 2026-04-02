@@ -644,6 +644,22 @@ app.post('/api/context-projects/:project/init-repo', async (req, res) => {
   }
 });
 
+app.post('/api/context-projects/:project/docs/:docName', async (req, res) => {
+  try {
+    const project = assertSafeProjectName(req.params.project);
+    const docName = String(req.params.docName || '');
+    if (!(await pathExists(getProjectDir(project)))) return res.status(404).json({ error: `Project not found: ${project}` });
+    if (!CONTEXT_DOC_FILENAMES.includes(docName)) return res.status(400).json({ error: `Unknown context doc: ${docName}` });
+    const content = String(req.body?.content ?? '');
+    const filePath = path.join(getProjectDocsDir(project), docName);
+    await fsp.mkdir(getProjectDocsDir(project), { recursive: true });
+    await fsp.writeFile(filePath, content, 'utf8');
+    res.json({ ok: true, project, docName, filePath, savedAt: new Date().toISOString() });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
 app.get('/api/workflow', async (req, res) => {
   try {
     const state = getWorkflowState();

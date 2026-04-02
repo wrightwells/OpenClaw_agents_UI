@@ -270,11 +270,37 @@ function renderContextDocs(data) {
 
   container.innerHTML = data.project.docs.map(doc => `
     <div class="doc-card">
-      <h3>${escapeHtml(doc.name)}</h3>
-      <span class="small path">${escapeHtml(doc.filePath)}</span>
-      <pre>${escapeHtml(doc.exists ? doc.content : 'File not found')}</pre>
+      <div class="editor-header">
+        <div>
+          <h3>${escapeHtml(doc.name)}</h3>
+          <span class="small path">${escapeHtml(doc.filePath)}</span>
+        </div>
+        <button data-save-doc="${escapeHtml(doc.name)}" title="Save changes to this working-context document.">Update</button>
+      </div>
+      <textarea class="context-doc-textarea" id="context-doc-${escapeHtml(doc.name)}">${escapeHtml(doc.exists ? doc.content : '')}</textarea>
+      <div id="context-doc-status-${escapeHtml(doc.name)}" class="small"></div>
     </div>
   `).join('');
+
+  container.querySelectorAll('[data-save-doc]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const docName = btn.getAttribute('data-save-doc');
+      const project = data.selectedProject;
+      const textarea = document.getElementById(`context-doc-${docName}`);
+      const status = document.getElementById(`context-doc-status-${docName}`);
+      status.textContent = 'Saving…';
+      try {
+        const result = await fetchJson(`/api/context-projects/${encodeURIComponent(project)}/docs/${encodeURIComponent(docName)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: textarea.value })
+        });
+        status.textContent = `Updated at ${new Date(result.savedAt).toLocaleString()}`;
+      } catch (error) {
+        status.textContent = `Update failed: ${error.message}`;
+      }
+    });
+  });
 }
 
 async function loadDashboard() {

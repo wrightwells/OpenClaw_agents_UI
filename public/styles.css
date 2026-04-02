@@ -48,6 +48,7 @@ pre { white-space:pre-wrap; word-break:break-word; background:#08101f; padding:1
 .agent-content { padding: 0 1rem 1rem; }
 .doc-card h3 { margin-bottom:.35rem; }
 .doc-card .small.path { margin-bottom:.75rem; display:block; }
+.context-doc-textarea { min-height: 260px; max-height: 420px; overflow: auto; }
 .context-layout, .workflow-layout { display:grid; gap:1rem; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); margin-bottom:1rem; }
 .field-label { display:block; margin: .6rem 0 .35rem; color:#cbd5f3; font-size:.95rem; }
 .checkbox-row, .radio-row { display:flex; align-items:center; gap:1rem; margin-top:.8rem; color:#dbe5ff; flex-wrap:wrap; }
