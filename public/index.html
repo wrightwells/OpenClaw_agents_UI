@@ -16,17 +16,39 @@
     </header>
 
     <nav class="menu">
-      <button data-view="dashboard" class="nav-btn active">Dashboard</button>
-      <button data-view="prompts" class="nav-btn">Prompt Editor</button>
-      <button data-view="runtime" class="nav-btn">Runtime Summary</button>
-      <button data-view="context" class="nav-btn">Working Context</button>
+      <button data-view="home" class="nav-btn active" title="Open the landing page and quick-start overview.">Home</button>
+      <button data-view="dashboard" class="nav-btn" title="View per-agent usage and cost status for day, week, and month.">Dashboard</button>
+      <button data-view="prompts" class="nav-btn" title="Edit agent template prompts, save them, and release them live.">Prompt Editor</button>
+      <button data-view="runtime" class="nav-btn" title="Inspect models, workspaces, and current OpenClaw runtime status.">Runtime Summary</button>
+      <button data-view="context" class="nav-btn" title="Manage project context docs, kickoff prompts, and repo-init handoff.">Working Context</button>
     </nav>
 
     <main>
-      <section id="view-dashboard" class="view active">
+      <section id="view-home" class="view active">
+        <div class="hero card">
+          <div class="hero-copy">
+            <div class="eyebrow">OpenClaw Team Console</div>
+            <h2>Landing page</h2>
+            <p class="hero-text">This is the operator home for your OpenClaw team. Use the menus above to move into agent monitoring, prompt release, runtime inspection, and project-scoped working context.</p>
+            <div class="actions-row">
+              <button id="homeToContext" class="primary" title="Jump straight to project working context management.">Open Working Context</button>
+              <button id="homeToPrompts" title="Jump to the prompt editor for agent template changes.">Open Prompt Editor</button>
+              <button id="homeToRuntime" title="Jump to runtime facts and the current OpenClaw status output.">Open Runtime Summary</button>
+            </div>
+          </div>
+          <div class="hero-media" title="Landing-page image slot. If you send a specific image, it can be placed here.">
+            <div class="hero-image-placeholder">
+              <div class="hero-image-label">Image slot ready</div>
+              <div class="small">No image file has been provided yet, so this placeholder is holding the layout.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="view-dashboard" class="view">
         <div class="page-header">
           <h2>Dashboard</h2>
-          <button id="refreshDashboard">Refresh</button>
+          <button id="refreshDashboard" title="Reload the dashboard data from the local backend.">Refresh</button>
         </div>
         <div id="dashboardSummary" class="summary-grid"></div>
         <div id="dashboardNote" class="note"></div>
@@ -37,8 +59,8 @@
         <div class="page-header">
           <h2>Prompt Editor</h2>
           <div class="actions-row">
-            <button id="refreshPrompts">Reload prompts</button>
-            <button id="releaseToLive" class="primary">Release to Live + Restart OpenClaw</button>
+            <button id="refreshPrompts" title="Reload prompt template files from disk.">Reload prompts</button>
+            <button id="releaseToLive" class="primary" title="Sync saved prompt templates into live workspaces and restart OpenClaw.">Release to Live + Restart OpenClaw</button>
           </div>
         </div>
         <div id="releaseStatus" class="note"></div>
@@ -48,7 +70,7 @@
       <section id="view-runtime" class="view">
         <div class="page-header">
           <h2>Runtime Summary</h2>
-          <button id="refreshRuntime">Refresh</button>
+          <button id="refreshRuntime" title="Reload current runtime facts and OpenClaw status output.">Refresh</button>
         </div>
         <div id="runtimeFacts" class="card-grid"></div>
         <div class="runtime-block">
@@ -60,7 +82,7 @@
       <section id="view-context" class="view">
         <div class="page-header">
           <h2>Working Context</h2>
-          <button id="refreshContext">Refresh</button>
+          <button id="refreshContext" title="Reload project list, selected project docs, and kickoff data.">Refresh</button>
         </div>
 
         <div class="context-layout">
@@ -69,7 +91,7 @@
             <label class="field-label" for="projectSelect">Selected project</label>
             <div class="actions-row">
               <select id="projectSelect"></select>
-              <button id="selectProjectBtn">Load project</button>
+              <button id="selectProjectBtn" title="Load the selected project’s working-context docs.">Load project</button>
             </div>
             <div id="projectListMeta" class="small"></div>
           </div>
@@ -84,7 +106,7 @@
             </select>
             <label class="checkbox-row"><input id="initRepoOnCreate" type="checkbox" /> Trigger repo init handoff for Alpha under ~/srv/</label>
             <div class="actions-row">
-              <button id="createProjectBtn" class="primary">Create project</button>
+              <button id="createProjectBtn" class="primary" title="Create a new project context folder, optionally seeded from another project.">Create project</button>
             </div>
             <div id="createProjectStatus" class="note hidden"></div>
           </div>
@@ -97,9 +119,9 @@
               <div class="small" id="kickoffMeta"></div>
             </div>
             <div class="actions-row">
-              <button id="generateKickoffBtn">Generate / Refresh prompt</button>
-              <button id="copyKickoffBtn">Copy prompt</button>
-              <button id="initRepoBtn">Trigger Alpha repo-init handoff</button>
+              <button id="generateKickoffBtn" title="Generate the project-specific startup prompt for the selected project.">Generate / Refresh prompt</button>
+              <button id="copyKickoffBtn" title="Copy the generated kickoff prompt to the clipboard.">Copy prompt</button>
+              <button id="initRepoBtn" title="Trigger the repo-init handoff path for Alpha for the selected project.">Trigger Alpha repo-init handoff</button>
             </div>
           </div>
           <textarea id="kickoffPrompt" readonly></textarea>

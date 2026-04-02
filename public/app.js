@@ -91,7 +91,7 @@ function renderPrompts(data) {
             <div class="small path">${escapeHtml(prompt.filePath)}</div>
             <div class="small ${dirty ? 'warning-text' : ''}">${dirty ? 'Modified in browser; not saved to template source yet.' : 'Saved to template source.'}</div>
           </div>
-          <button data-save-agent="${escapeHtml(prompt.agentId)}">Save ${escapeHtml(prompt.agentId)}</button>
+          <button data-save-agent="${escapeHtml(prompt.agentId)}" title="Save only this agent template back to disk.">Save ${escapeHtml(prompt.agentId)}</button>
         </div>
         <textarea id="prompt-${escapeHtml(prompt.agentId)}">${escapeHtml(currentValue)}</textarea>
         <div id="save-status-${escapeHtml(prompt.agentId)}" class="small"></div>
@@ -312,19 +312,23 @@ async function triggerRepoInit() {
   renderRepoInitStatus('repoInitStatus', result.repoInit);
 }
 
+async function openView(view) {
+  if (view !== 'prompts' && hasUnsavedPromptChanges()) {
+    const ok = window.confirm('You have unsaved prompt edits. Leave the Prompt Editor anyway?');
+    if (!ok) return;
+  }
+  switchView(view);
+  if (view === 'dashboard') await loadDashboard();
+  if (view === 'prompts') await loadPrompts();
+  if (view === 'runtime') await loadRuntime();
+  if (view === 'context') await loadContextDocs();
+  if (view === 'home') setGlobalStatus('Landing page ready');
+}
+
 function setupNav() {
   document.querySelectorAll('.nav-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
-      const view = btn.dataset.view;
-      if (view !== 'prompts' && hasUnsavedPromptChanges()) {
-        const ok = window.confirm('You have unsaved prompt edits. Leave the Prompt Editor anyway?');
-        if (!ok) return;
-      }
-      switchView(view);
-      if (view === 'dashboard') await loadDashboard();
-      if (view === 'prompts') await loadPrompts();
-      if (view === 'runtime') await loadRuntime();
-      if (view === 'context') await loadContextDocs();
+      await openView(btn.dataset.view);
     });
   });
 }
@@ -340,13 +344,16 @@ function setupActions() {
   document.getElementById('generateKickoffBtn').addEventListener('click', generateKickoffPrompt);
   document.getElementById('copyKickoffBtn').addEventListener('click', copyKickoffPrompt);
   document.getElementById('initRepoBtn').addEventListener('click', triggerRepoInit);
+  document.getElementById('homeToContext').addEventListener('click', () => openView('context'));
+  document.getElementById('homeToPrompts').addEventListener('click', () => openView('prompts'));
+  document.getElementById('homeToRuntime').addEventListener('click', () => openView('runtime'));
 }
 
 async function main() {
   setupNav();
   setupActions();
-  switchView('dashboard');
-  await loadDashboard();
+  switchView('home');
+  setGlobalStatus('Landing page ready');
 }
 
 main().catch(error => {
