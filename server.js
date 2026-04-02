@@ -17,6 +17,12 @@ const TEMPLATE_DIR = path.join(TEAM_ROOT, 'agent-templates');
 const SYNC_SCRIPT = path.join(TEAM_ROOT, 'scripts', 'sync-agent-prompts.sh');
 const UI_STATE_PATH = path.join(__dirname, 'data', 'ui-state.json');
 const AGENT_ORDER = ['main', 'alpha', 'delta', 'charlie', 'tango', 'romeo', 'india'];
+const CONTEXT_DOCS = [
+  path.join(HOME, '.openclaw', 'dev-context', 'docs', 'current-status.md'),
+  path.join(HOME, '.openclaw', 'dev-context', 'docs', 'decisions.md'),
+  path.join(HOME, '.openclaw', 'dev-context', 'docs', 'next-steps.md'),
+  path.join(HOME, '.openclaw', 'dev-context', 'docs', 'dev-workflow.md')
+];
 
 app.use(express.json({ limit: '2mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
@@ -70,7 +76,7 @@ function getAgentConfigs() {
   });
 }
 
-function buildMetricSet(agentId, override, label) {
+function buildMetricSet(_agentId, override, label) {
   const base = override?.[label] || {};
   return {
     usage: base.usage ?? null,
@@ -113,12 +119,6 @@ function buildSummary() {
       note: state.notes?.dashboard || null
     }
   };
-}
-
-async function readPrompt(agentId) {
-  const filePath = path.join(TEMPLATE_DIR, `${agentId}.md`);
-  const content = await fsp.readFile(filePath, 'utf8');
-  return { agentId, filePath, content };
 }
 
 app.get('/api/summary', (_req, res) => {
@@ -165,13 +165,50 @@ app.post('/api/prompts/:agentId', async (req, res) => {
 
 app.post('/api/release', async (_req, res) => {
   try {
-    const { stdout, stderr } = await execFileAsync('bash', [SYNC_SCRIPT], { cwd: TEAM_ROOT, env: process.env, maxBuffer: 1024 * 1024 });
+    const syncResult = await execFileAsync('bash', [SYNC_SCRIPT], {
+      cwd: TEAM_ROOT,
+      env: process.env,
+      maxBuffer: 1024 * 1024
+    });
+
+    let restartStdout = '';
+    let restartStderr = '';
+    try {
+      const restarted = await execFileAsync('openclaw', ['gateway', 'restart'], {
+        env: process.env,
+        maxBuffer: 1024 * 1024
+      });
+      restartStdout = restarted.stdout || '';
+      restartStderr = restarted.stderr || '';
+    } catch (restartError) {
+      restartStdout = restartError.stdout || '';
+      restartStderr = restartError.stderr || restartError.message || '';
+      throw Object.assign(new Error(`Prompt sync succeeded but OpenClaw restart failed: ${restartError.message}`), {
+        stdout: `${syncResult.stdout || ''}\n${restartStdout}`.trim(),
+        stderr: `${syncResult.stderr || ''}\n${restartStderr}`.trim()
+      });
+    }
+
     const state = getUiState();
     state.releaseHistory = state.releaseHistory || [];
-    state.releaseHistory.unshift({ at: new Date().toISOString(), stdout, stderr });
+    state.releaseHistory.unshift({
+      at: new Date().toISOString(),
+      syncStdout: syncResult.stdout || '',
+      syncStderr: syncResult.stderr || '',
+      restartStdout,
+      restartStderr
+    });
     state.releaseHistory = state.releaseHistory.slice(0, 10);
     await saveUiState(state);
-    res.json({ ok: true, ranAt: new Date().toISOString(), stdout, stderr });
+
+    res.json({
+      ok: true,
+      ranAt: new Date().toISOString(),
+      syncStdout: syncResult.stdout || '',
+      syncStderr: syncResult.stderr || '',
+      restartStdout,
+      restartStderr
+    });
   } catch (error) {
     res.status(500).json({
       ok: false,
@@ -204,6 +241,28 @@ app.get('/api/runtime', async (_req, res) => {
       statusText,
       generatedAt: new Date().toISOString()
     });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/context-docs', async (_req, res) => {
+  try {
+    const docs = await Promise.all(CONTEXT_DOCS.map(async (filePath) => {
+      let content = '';
+      let exists = false;
+      try {
+        content = await fsp.readFile(filePath, 'utf8');
+        exists = true;
+      } catch {}
+      return {
+        name: path.basename(filePath),
+        filePath,
+        exists,
+        content
+      };
+    }));
+    res.json({ docs, generatedAt: new Date().toISOString() });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

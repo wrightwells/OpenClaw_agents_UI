@@ -2,6 +2,7 @@ const state = {
   dashboard: null,
   prompts: null,
   runtime: null,
+  contextDocs: null,
 };
 
 function setGlobalStatus(text) {
@@ -41,30 +42,32 @@ function renderDashboard(data) {
     <div class="card"><h3>Last refresh</h3><div>${new Date(summary.lastRefresh).toLocaleString()}</div></div>
   `;
   document.getElementById('dashboardNote').textContent = summary.note || '';
-  document.getElementById('agentCards').innerHTML = data.agents.map(agent => `
-    <div class="card">
-      <div class="agent-header">
-        <div>
-          <h3>${escapeHtml(agent.id)}</h3>
-          <div class="small">Model: ${escapeHtml(agent.model)}</div>
+  document.getElementById('agentCards').innerHTML = data.agents.map((agent, index) => `
+    <details class="agent-details agent-section" ${index === 0 ? 'open' : ''}>
+      <summary>
+        <div class="agent-title">
+          <strong>${escapeHtml(agent.id)}</strong>
+          <span class="small">Model: ${escapeHtml(agent.model)} · Updated ${new Date(agent.lastRefresh).toLocaleString()}</span>
         </div>
-        <div class="small">Updated ${new Date(agent.lastRefresh).toLocaleString()}</div>
+        <span class="agent-chevron">›</span>
+      </summary>
+      <div class="agent-content">
+        <div class="metric-grid">
+          ${['day', 'week', 'month'].map(period => {
+            const m = agent.metrics[period];
+            return `
+              <div class="metric-card">
+                <h4>${period === 'day' ? 'Last day' : period === 'week' ? 'Week total' : 'Month total'}</h4>
+                <div class="metric-line"><span class="badge ${badgeClass(m.status)}">${escapeHtml(m.status)}</span></div>
+                <div class="metric-line"><strong>Usage:</strong> ${m.usage ?? 'Unavailable'}</div>
+                <div class="metric-line"><strong>Cost:</strong> ${m.cost ?? 'Unavailable'}</div>
+                <div class="small">${escapeHtml(m.basis)}</div>
+              </div>
+            `;
+          }).join('')}
+        </div>
       </div>
-      <div class="metric-grid">
-        ${['day', 'week', 'month'].map(period => {
-          const m = agent.metrics[period];
-          return `
-            <div class="metric-card">
-              <h4>${period === 'day' ? 'Last day' : period === 'week' ? 'Week total' : 'Month total'}</h4>
-              <div class="metric-line"><span class="badge ${badgeClass(m.status)}">${escapeHtml(m.status)}</span></div>
-              <div class="metric-line"><strong>Usage:</strong> ${m.usage ?? 'Unavailable'}</div>
-              <div class="metric-line"><strong>Cost:</strong> ${m.cost ?? 'Unavailable'}</div>
-              <div class="small">${escapeHtml(m.basis)}</div>
-            </div>
-          `;
-        }).join('')}
-      </div>
-    </div>
+    </details>
   `).join('');
 }
 
@@ -118,6 +121,17 @@ function renderRuntime(data) {
   document.getElementById('statusText').textContent = data.statusText || 'No status available';
 }
 
+function renderContextDocs(data) {
+  const container = document.getElementById('contextDocs');
+  container.innerHTML = data.docs.map(doc => `
+    <div class="doc-card">
+      <h3>${escapeHtml(doc.name)}</h3>
+      <span class="small path">${escapeHtml(doc.filePath)}</span>
+      <pre>${escapeHtml(doc.exists ? doc.content : 'File not found')}</pre>
+    </div>
+  `).join('');
+}
+
 async function loadDashboard() {
   setGlobalStatus('Loading dashboard…');
   state.dashboard = await fetchJson('/api/summary');
@@ -139,12 +153,19 @@ async function loadRuntime() {
   setGlobalStatus('Runtime ready');
 }
 
+async function loadContextDocs() {
+  setGlobalStatus('Loading context docs…');
+  state.contextDocs = await fetchJson('/api/context-docs');
+  renderContextDocs(state.contextDocs);
+  setGlobalStatus('Context docs ready');
+}
+
 async function releaseToLive() {
   const status = document.getElementById('releaseStatus');
-  status.textContent = 'Running release to live…';
+  status.textContent = 'Running release to live and restarting OpenClaw…';
   try {
     const result = await fetchJson('/api/release', { method: 'POST' });
-    status.textContent = `Release completed at ${new Date(result.ranAt).toLocaleString()}\n\n${result.stdout || ''}${result.stderr ? `\n${result.stderr}` : ''}`;
+    status.textContent = `Release completed at ${new Date(result.ranAt).toLocaleString()}\n\nPrompt sync output:\n${result.syncStdout || '(none)'}${result.syncStderr ? `\n${result.syncStderr}` : ''}\n\nRestart output:\n${result.restartStdout || '(none)'}${result.restartStderr ? `\n${result.restartStderr}` : ''}`;
     await loadRuntime();
   } catch (error) {
     status.textContent = `Release failed: ${error.message}`;
@@ -159,6 +180,7 @@ function setupNav() {
       if (view === 'dashboard') await loadDashboard();
       if (view === 'prompts') await loadPrompts();
       if (view === 'runtime') await loadRuntime();
+      if (view === 'context') await loadContextDocs();
     });
   });
 }
@@ -167,6 +189,7 @@ function setupActions() {
   document.getElementById('refreshDashboard').addEventListener('click', loadDashboard);
   document.getElementById('refreshPrompts').addEventListener('click', loadPrompts);
   document.getElementById('refreshRuntime').addEventListener('click', loadRuntime);
+  document.getElementById('refreshContext').addEventListener('click', loadContextDocs);
   document.getElementById('releaseToLive').addEventListener('click', releaseToLive);
 }
 

@@ -19,6 +19,7 @@
       <button data-view="dashboard" class="nav-btn active">Dashboard</button>
       <button data-view="prompts" class="nav-btn">Prompt Editor</button>
       <button data-view="runtime" class="nav-btn">Runtime Summary</button>
+      <button data-view="context" class="nav-btn">Working Context</button>
     </nav>
 
     <main>
@@ -29,7 +30,7 @@
         </div>
         <div id="dashboardSummary" class="summary-grid"></div>
         <div id="dashboardNote" class="note"></div>
-        <div id="agentCards" class="card-grid"></div>
+        <div id="agentCards" class="stack-list"></div>
       </section>
 
       <section id="view-prompts" class="view">
@@ -37,7 +38,7 @@
           <h2>Prompt Editor</h2>
           <div class="actions-row">
             <button id="refreshPrompts">Reload prompts</button>
-            <button id="releaseToLive" class="primary">Release to Live</button>
+            <button id="releaseToLive" class="primary">Release to Live + Restart OpenClaw</button>
           </div>
         </div>
         <div id="releaseStatus" class="note"></div>
@@ -54,6 +55,14 @@
           <h3>OpenClaw status</h3>
           <pre id="statusText"></pre>
         </div>
+      </section>
+
+      <section id="view-context" class="view">
+        <div class="page-header">
+          <h2>Working Context</h2>
+          <button id="refreshContext">Refresh</button>
+        </div>
+        <div id="contextDocs" class="editor-list"></div>
       </section>
     </main>
 
