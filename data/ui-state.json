@@ -5,8 +5,12 @@
     "dashboard": "Exact billable token/cost data may be unavailable when using ChatGPT Plus / Codex OAuth instead of direct API billing."
   },
   "workingContext": {
-    "selectedProject": null,
+    "selectedProject": "General",
     "lastRepoInitRequest": null,
     "lastProjectCreatedAt": null
+  },
+  "workflow": {
+    "tasks": [],
+    "selectedTaskId": null
   }
 }
