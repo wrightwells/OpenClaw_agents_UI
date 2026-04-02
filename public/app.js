@@ -418,19 +418,30 @@ async function submitWorkflowTask() {
   const request = document.getElementById('workflowRequest').value.trim();
   const notifyChannel = document.querySelector('input[name="workflowNotify"]:checked')?.value || 'none';
   const status = document.getElementById('workflowSubmitStatus');
+  const clickedAt = new Date().toLocaleTimeString();
   const payload = { project, request, notifyChannel };
   status.classList.remove('hidden');
+  status.textContent = `Button clicked at ${clickedAt}`;
 
   if (!project) {
-    status.textContent = 'Submit failed: no project selected.';
+    status.textContent = `Button clicked at ${clickedAt}
+
+Submit failed: no project selected.`;
     return;
   }
   if (!request) {
-    status.textContent = 'Submit failed: request text is empty.';
+    status.textContent = `Button clicked at ${clickedAt}
+
+Submit failed: request text is empty.`;
     return;
   }
 
-  status.textContent = `Submitting task…\n\nPayload:\n${JSON.stringify(payload, null, 2)}`;
+  status.textContent = `Button clicked at ${clickedAt}
+
+Submitting task…
+
+Payload:
+${JSON.stringify(payload, null, 2)}`;
   try {
     const result = await fetchJson('/api/workflow/tasks', {
       method: 'POST',
@@ -438,11 +449,20 @@ async function submitWorkflowTask() {
       body: JSON.stringify(payload)
     });
     document.getElementById('workflowRequest').value = '';
-    status.textContent = `Task submitted for ${result.task.project}. Current worker: ${result.task.activeWorker}.\n\nTask id: ${result.task.id}`;
+    status.textContent = `Button clicked at ${clickedAt}
+
+Task submitted for ${result.task.project}. Current worker: ${result.task.activeWorker}.
+
+Task id: ${result.task.id}`;
     await loadWorkflow(result.task.id);
     await loadWorkflow(result.task.id);
   } catch (error) {
-    status.textContent = `Submit failed: ${error.message}\n\nPayload:\n${JSON.stringify(payload, null, 2)}`;
+    status.textContent = `Button clicked at ${clickedAt}
+
+Submit failed: ${error.message}
+
+Payload:
+${JSON.stringify(payload, null, 2)}`;
   }
 }
 
