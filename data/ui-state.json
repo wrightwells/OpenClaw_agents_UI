@@ -3,5 +3,10 @@
   "releaseHistory": [],
   "notes": {
     "dashboard": "Exact billable token/cost data may be unavailable when using ChatGPT Plus / Codex OAuth instead of direct API billing."
+  },
+  "workingContext": {
+    "selectedProject": null,
+    "lastRepoInitRequest": null,
+    "lastProjectCreatedAt": null
   }
 }

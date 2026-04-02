@@ -10,7 +10,7 @@
     <header class="topbar">
       <div>
         <h1>OpenClaw_agents_UI</h1>
-        <p class="subtle">Local UI for OpenClaw agent monitoring and prompt management</p>
+        <p class="subtle">Local UI for OpenClaw agent monitoring, prompt management, and project working context</p>
       </div>
       <div id="globalStatus" class="status-pill">Loading…</div>
     </header>
@@ -62,6 +62,50 @@
           <h2>Working Context</h2>
           <button id="refreshContext">Refresh</button>
         </div>
+
+        <div class="context-layout">
+          <div class="panel">
+            <h3>Projects</h3>
+            <label class="field-label" for="projectSelect">Selected project</label>
+            <div class="actions-row">
+              <select id="projectSelect"></select>
+              <button id="selectProjectBtn">Load project</button>
+            </div>
+            <div id="projectListMeta" class="small"></div>
+          </div>
+
+          <div class="panel">
+            <h3>Create project</h3>
+            <label class="field-label" for="newProjectName">Project name</label>
+            <input id="newProjectName" type="text" placeholder="e.g. OpenClaw_agents_UI" />
+            <label class="field-label" for="copyProjectSelect">Copy docs from existing project (optional)</label>
+            <select id="copyProjectSelect">
+              <option value="">Start from blank templates</option>
+            </select>
+            <label class="checkbox-row"><input id="initRepoOnCreate" type="checkbox" /> Trigger repo init handoff for Alpha under ~/srv/</label>
+            <div class="actions-row">
+              <button id="createProjectBtn" class="primary">Create project</button>
+            </div>
+            <div id="createProjectStatus" class="note hidden"></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="page-header slim">
+            <div>
+              <h3>Kickoff Prompt</h3>
+              <div class="small" id="kickoffMeta"></div>
+            </div>
+            <div class="actions-row">
+              <button id="generateKickoffBtn">Generate / Refresh prompt</button>
+              <button id="copyKickoffBtn">Copy prompt</button>
+              <button id="initRepoBtn">Trigger Alpha repo-init handoff</button>
+            </div>
+          </div>
+          <textarea id="kickoffPrompt" readonly></textarea>
+          <div id="repoInitStatus" class="note hidden"></div>
+        </div>
+
         <div id="contextDocs" class="editor-list"></div>
       </section>
     </main>

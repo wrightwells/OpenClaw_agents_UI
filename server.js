@@ -2,7 +2,7 @@ const express = require('express');
 const fs = require('fs');
 const fsp = require('fs/promises');
 const path = require('path');
-const { execFile } = require('child_process');
+const { execFile, spawn } = require('child_process');
 const os = require('os');
 const util = require('util');
 
@@ -16,13 +16,12 @@ const TEAM_ROOT = path.join(HOME, '.openclaw', 'workspace', 'OpenClaw_Team');
 const TEMPLATE_DIR = path.join(TEAM_ROOT, 'agent-templates');
 const SYNC_SCRIPT = path.join(TEAM_ROOT, 'scripts', 'sync-agent-prompts.sh');
 const UI_STATE_PATH = path.join(__dirname, 'data', 'ui-state.json');
+const DEV_CONTEXT_ROOT = path.join(HOME, '.openclaw', 'dev-context');
+const PROJECTS_ROOT = path.join(DEV_CONTEXT_ROOT, 'projects');
+const CONTEXT_DOC_FILENAMES = ['current-status.md', 'decisions.md', 'next-steps.md', 'dev-workflow.md'];
+const KICKOFF_SCRIPT = path.join(DEV_CONTEXT_ROOT, 'print-kickoff-prompt.sh');
+const PROJECT_INIT_HOOK = path.join(DEV_CONTEXT_ROOT, 'hooks', 'init-project-repo.sh');
 const AGENT_ORDER = ['main', 'alpha', 'delta', 'charlie', 'tango', 'romeo', 'india'];
-const CONTEXT_DOCS = [
-  path.join(HOME, '.openclaw', 'dev-context', 'docs', 'current-status.md'),
-  path.join(HOME, '.openclaw', 'dev-context', 'docs', 'decisions.md'),
-  path.join(HOME, '.openclaw', 'dev-context', 'docs', 'next-steps.md'),
-  path.join(HOME, '.openclaw', 'dev-context', 'docs', 'dev-workflow.md')
-];
 
 app.use(express.json({ limit: '2mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
@@ -44,7 +43,12 @@ function getUiState() {
   return readJsonSafe(UI_STATE_PATH, {
     usageOverrides: {},
     releaseHistory: [],
-    notes: {}
+    notes: {},
+    workingContext: {
+      selectedProject: null,
+      lastProjectCreatedAt: null,
+      lastRepoInitRequest: null
+    }
   });
 }
 
@@ -118,6 +122,211 @@ function buildSummary() {
       lastRefresh: new Date().toISOString(),
       note: state.notes?.dashboard || null
     }
+  };
+}
+
+function slugifyProjectName(name) {
+  return String(name || '')
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/[^A-Za-z0-9._-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^[-.]+|[-.]+$/g, '');
+}
+
+function assertSafeProjectName(name) {
+  const project = slugifyProjectName(name);
+  if (!project) {
+    throw new Error('Project name is required.');
+  }
+  if (project === '.' || project === '..') {
+    throw new Error('Project name is invalid.');
+  }
+  return project;
+}
+
+function getProjectDir(project) {
+  return path.join(PROJECTS_ROOT, project);
+}
+
+function getProjectDocsDir(project) {
+  return path.join(getProjectDir(project), 'docs');
+}
+
+function getProjectDocPaths(project) {
+  return CONTEXT_DOC_FILENAMES.map((name) => path.join(getProjectDocsDir(project), name));
+}
+
+function buildBlankDocContent(project, fileName) {
+  const title = fileName.replace(/\.md$/, '').replace(/-/g, ' ');
+  return `# ${title}\n\nProject: ${project}\n\n`;
+}
+
+async function pathExists(filePath) {
+  try {
+    await fsp.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function ensureProjectStructure(project, sourceProject = null) {
+  const docsDir = getProjectDocsDir(project);
+  await fsp.mkdir(docsDir, { recursive: true });
+
+  for (const fileName of CONTEXT_DOC_FILENAMES) {
+    const destination = path.join(docsDir, fileName);
+    if (sourceProject) {
+      const source = path.join(getProjectDocsDir(sourceProject), fileName);
+      if (await pathExists(source)) {
+        await fsp.copyFile(source, destination);
+        continue;
+      }
+    }
+    if (!(await pathExists(destination))) {
+      await fsp.writeFile(destination, buildBlankDocContent(project, fileName), 'utf8');
+    }
+  }
+}
+
+async function readProject(project) {
+  const projectDir = getProjectDir(project);
+  const docsDir = getProjectDocsDir(project);
+  const docs = [];
+
+  for (const fileName of CONTEXT_DOC_FILENAMES) {
+    const filePath = path.join(docsDir, fileName);
+    let content = '';
+    let exists = false;
+    try {
+      content = await fsp.readFile(filePath, 'utf8');
+      exists = true;
+    } catch {}
+    docs.push({ name: fileName, filePath, exists, content });
+  }
+
+  return {
+    name: project,
+    projectDir,
+    docsDir,
+    docs,
+    kickoffPromptScript: KICKOFF_SCRIPT,
+    kickoffPromptAvailable: await pathExists(KICKOFF_SCRIPT)
+  };
+}
+
+async function listProjects() {
+  await fsp.mkdir(PROJECTS_ROOT, { recursive: true });
+  const entries = await fsp.readdir(PROJECTS_ROOT, { withFileTypes: true });
+  const projects = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const name = entry.name;
+    const docsDir = getProjectDocsDir(name);
+    const docsPresent = [];
+    for (const fileName of CONTEXT_DOC_FILENAMES) {
+      if (await pathExists(path.join(docsDir, fileName))) docsPresent.push(fileName);
+    }
+    const stats = await fsp.stat(getProjectDir(name));
+    projects.push({
+      name,
+      docsDir,
+      docsPresent,
+      missingDocs: CONTEXT_DOC_FILENAMES.filter(file => !docsPresent.includes(file)),
+      updatedAt: stats.mtime.toISOString()
+    });
+  }
+  projects.sort((a, b) => a.name.localeCompare(b.name));
+  return projects;
+}
+
+async function getSelectedProject(projectName) {
+  const state = getUiState();
+  const projects = await listProjects();
+  if (projectName) return assertSafeProjectName(projectName);
+  if (state.workingContext?.selectedProject && projects.some(project => project.name === state.workingContext.selectedProject)) {
+    return state.workingContext.selectedProject;
+  }
+  return projects[0]?.name || null;
+}
+
+async function saveSelectedProject(project) {
+  const state = getUiState();
+  state.workingContext = state.workingContext || {};
+  state.workingContext.selectedProject = project;
+  await saveUiState(state);
+}
+
+async function buildKickoffPrompt(project) {
+  if (await pathExists(KICKOFF_SCRIPT)) {
+    try {
+      const { stdout } = await execFileAsync('bash', [KICKOFF_SCRIPT, project], {
+        cwd: DEV_CONTEXT_ROOT,
+        env: process.env,
+        maxBuffer: 1024 * 1024
+      });
+      return stdout.trim();
+    } catch (error) {
+      if (error.stdout?.trim()) return error.stdout.trim();
+      throw error;
+    }
+  }
+
+  const docPaths = getProjectDocPaths(project);
+  return `Read ${docPaths.map(file => `\`${file}\``).join(', ')}, inspect git status/diff for \`${path.join(HOME, 'srv', project)}\`, summarise where we are, and continue.`;
+}
+
+async function triggerProjectRepoInit(project, options = {}) {
+  const repoRoot = path.join(HOME, 'srv', project);
+  const kickoffPrompt = await buildKickoffPrompt(project);
+  const manualCommand = [
+    'Alpha handoff required.',
+    `Create or initialize the repo at ${repoRoot}.`,
+    'Suggested kickoff prompt:',
+    kickoffPrompt
+  ].join('\n\n');
+
+  if (await pathExists(PROJECT_INIT_HOOK)) {
+    try {
+      const result = await execFileAsync('bash', [PROJECT_INIT_HOOK, project, repoRoot], {
+        cwd: DEV_CONTEXT_ROOT,
+        env: { ...process.env, OPENCLAW_PROJECT_NAME: project, OPENCLAW_PROJECT_REPO_ROOT: repoRoot },
+        maxBuffer: 1024 * 1024
+      });
+      return {
+        status: 'hook-executed',
+        repoRoot,
+        stdout: result.stdout || '',
+        stderr: result.stderr || '',
+        manualCommand,
+        note: `Executed ${PROJECT_INIT_HOOK}.`
+      };
+    } catch (error) {
+      return {
+        status: 'hook-failed',
+        repoRoot,
+        stdout: error.stdout || '',
+        stderr: error.stderr || error.message || '',
+        manualCommand,
+        note: `Tried ${PROJECT_INIT_HOOK} but it failed. Manual Alpha handoff still required.`
+      };
+    }
+  }
+
+  const requestDir = path.join(getProjectDir(project), 'handoff');
+  await fsp.mkdir(requestDir, { recursive: true });
+  const requestPath = path.join(requestDir, `alpha-init-${new Date().toISOString().replace(/[:.]/g, '-')}.md`);
+  await fsp.writeFile(requestPath, `${manualCommand}\n`, 'utf8');
+
+  return {
+    status: 'manual-handoff-required',
+    repoRoot,
+    requestPath,
+    stdout: '',
+    stderr: '',
+    manualCommand,
+    note: `No hook script found at ${PROJECT_INIT_HOOK}. Wrote a handoff note for Alpha instead.`
   };
 }
 
@@ -246,25 +455,119 @@ app.get('/api/runtime', async (_req, res) => {
   }
 });
 
-app.get('/api/context-docs', async (_req, res) => {
+app.get('/api/context-docs', async (req, res) => {
   try {
-    const docs = await Promise.all(CONTEXT_DOCS.map(async (filePath) => {
-      let content = '';
-      let exists = false;
-      try {
-        content = await fsp.readFile(filePath, 'utf8');
-        exists = true;
-      } catch {}
-      return {
-        name: path.basename(filePath),
-        filePath,
-        exists,
-        content
-      };
-    }));
-    res.json({ docs, generatedAt: new Date().toISOString() });
+    const projects = await listProjects();
+    const selectedProject = await getSelectedProject(req.query.project);
+    if (!selectedProject) {
+      return res.json({
+        projects,
+        selectedProject: null,
+        project: null,
+        kickoffPrompt: '',
+        generatedAt: new Date().toISOString(),
+        repoInit: { hookPath: PROJECT_INIT_HOOK, hookExists: await pathExists(PROJECT_INIT_HOOK) }
+      });
+    }
+
+    await saveSelectedProject(selectedProject);
+    const project = await readProject(selectedProject);
+    const kickoffPrompt = await buildKickoffPrompt(selectedProject);
+
+    res.json({
+      projects,
+      selectedProject,
+      project,
+      kickoffPrompt,
+      generatedAt: new Date().toISOString(),
+      repoInit: { hookPath: PROJECT_INIT_HOOK, hookExists: await pathExists(PROJECT_INIT_HOOK) }
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/context-projects/select', async (req, res) => {
+  try {
+    const project = assertSafeProjectName(req.body?.project);
+    if (!(await pathExists(getProjectDir(project)))) {
+      return res.status(404).json({ error: `Project not found: ${project}` });
+    }
+    await saveSelectedProject(project);
+    res.json({ ok: true, selectedProject: project });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.post('/api/context-projects', async (req, res) => {
+  try {
+    const project = assertSafeProjectName(req.body?.name);
+    const copyFrom = req.body?.copyFrom ? assertSafeProjectName(req.body.copyFrom) : null;
+    const initRepo = Boolean(req.body?.initRepo);
+
+    if (await pathExists(getProjectDir(project))) {
+      return res.status(409).json({ error: `Project already exists: ${project}` });
+    }
+    if (copyFrom && !(await pathExists(getProjectDir(copyFrom)))) {
+      return res.status(404).json({ error: `Source project not found: ${copyFrom}` });
+    }
+
+    await ensureProjectStructure(project, copyFrom);
+    await saveSelectedProject(project);
+
+    let repoInit = null;
+    if (initRepo) {
+      repoInit = await triggerProjectRepoInit(project, { copyFrom });
+      const state = getUiState();
+      state.workingContext = state.workingContext || {};
+      state.workingContext.lastRepoInitRequest = { project, at: new Date().toISOString(), status: repoInit.status, repoRoot: repoInit.repoRoot };
+      state.workingContext.lastProjectCreatedAt = new Date().toISOString();
+      await saveUiState(state);
+    } else {
+      const state = getUiState();
+      state.workingContext = state.workingContext || {};
+      state.workingContext.lastProjectCreatedAt = new Date().toISOString();
+      await saveUiState(state);
+    }
+
+    res.status(201).json({
+      ok: true,
+      project: await readProject(project),
+      selectedProject: project,
+      copiedFrom: copyFrom,
+      repoInit,
+      kickoffPrompt: await buildKickoffPrompt(project)
+    });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.post('/api/context-projects/:project/kickoff', async (req, res) => {
+  try {
+    const project = assertSafeProjectName(req.params.project);
+    if (!(await pathExists(getProjectDir(project)))) {
+      return res.status(404).json({ error: `Project not found: ${project}` });
+    }
+    await saveSelectedProject(project);
+    const kickoffPrompt = await buildKickoffPrompt(project);
+    res.json({ ok: true, project, kickoffPrompt });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.post('/api/context-projects/:project/init-repo', async (req, res) => {
+  try {
+    const project = assertSafeProjectName(req.params.project);
+    if (!(await pathExists(getProjectDir(project)))) {
+      return res.status(404).json({ error: `Project not found: ${project}` });
+    }
+    const repoInit = await triggerProjectRepoInit(project, req.body || {});
+    res.json({ ok: true, project, repoInit });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
   }
 });
 
