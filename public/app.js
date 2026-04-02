@@ -428,6 +428,21 @@ async function copyKickoffPrompt() {
   setGlobalStatus('Kickoff prompt copied to clipboard');
 }
 
+async function generatePromptEditorKickoff() {
+  const project = document.getElementById('promptProjectSelect')?.value;
+  if (!project) return window.alert('Select a project first.');
+  const result = await fetchJson(`/api/context-projects/${encodeURIComponent(project)}/kickoff`, { method: 'POST' });
+  const textarea = document.getElementById('promptKickoffText');
+  if (textarea) textarea.value = result.kickoffPrompt || '';
+}
+
+async function copyPromptEditorKickoff() {
+  const textarea = document.getElementById('promptKickoffText');
+  if (!textarea || !textarea.value.trim()) return window.alert('Generate a kickoff prompt first.');
+  await navigator.clipboard.writeText(textarea.value);
+  setGlobalStatus('Prompt Editor kickoff prompt copied to clipboard');
+}
+
 async function triggerRepoInit() {
   const project = document.getElementById('projectSelect').value || state.contextDocs?.selectedProject;
   if (!project) return window.alert('Select or create a project first.');
