@@ -458,13 +458,141 @@ function dedupeLogs(logs) {
   });
 }
 
+
+function extractOutputText(resultRaw) {
+  if (!resultRaw) return '';
+  try {
+    const parsed = JSON.parse(resultRaw);
+    if (typeof parsed?.payload?.output_text === 'string') return parsed.payload.output_text;
+    if (Array.isArray(parsed?.payload?.output)) {
+      return parsed.payload.output.map((item) => {
+        if (typeof item === 'string') return item;
+        if (typeof item?.text === 'string') return item.text;
+        return JSON.stringify(item);
+      }).join('
+');
+    }
+  } catch {}
+  return resultRaw;
+}
+
+function parseWorkflowQuestion(resultRaw, task) {
+  const text = extractOutputText(resultRaw).trim();
+  if (!text) return null;
+  const candidates = [text];
+  const fenced = text.match(/```json\s*([\s\S]*?)```/i);
+  if (fenced?.[1]) candidates.push(fenced[1].trim());
+  const firstBrace = text.indexOf('{');
+  const lastBrace = text.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace > firstBrace) candidates.push(text.slice(firstBrace, lastBrace + 1));
+  for (const candidate of candidates) {
+    try {
+      const obj = JSON.parse(candidate);
+      if (obj?.kind === 'workflow_question' && obj?.question) {
+        return {
+          id: crypto.randomUUID(),
+          taskId: task.id,
+          project: task.project,
+          askedBy: obj.askedBy || task.activeWorker || 'Agent',
+          role: obj.role || '',
+          question: obj.question,
+          details: obj.details || '',
+          responseType: obj.responseType || 'text',
+          choices: Array.isArray(obj.choices) ? obj.choices : [],
+          required: obj.required !== false,
+          blocking: obj.blocking !== false,
+          status: 'waiting',
+          askedAt: new Date().toISOString(),
+          answer: '',
+          answeredAt: null,
+          resumeHint: obj.resumeHint || ''
+        };
+      }
+    } catch {}
+  }
+  return null;
+}
+
+async function resumeWorkflowTask(task, question, answer) {
+  const taskDir = path.join(WORKFLOW_TASKS_ROOT, task.id);
+  await fsp.mkdir(taskDir, { recursive: true });
+  const statePath = path.join(taskDir, 'state.json');
+  const selectedAgent = readHookTaskState(task.id)?.agent || task.activeWorker || 'main';
+  const prompt = [
+    `Project: ${task.project}`,
+    `Original request: ${task.request}`,
+    '',
+    `Previously you asked: ${question.question}`,
+    `User answer: ${answer}`,
+    question.resumeHint ? `Resume hint: ${question.resumeHint}` : '',
+    '',
+    'Continue the task from this answer and provide a concise useful result summary.'
+  ].filter(Boolean).join('
+');
+
+  const runScript = path.join(taskDir, 'resume.sh');
+  const script = `#!/usr/bin/env bash
+set -euo pipefail
+STATE_PATH=${JSON.stringify(str(statePath))}
+RESULT_PATH=${JSON.stringify(str(path.join(taskDir, 'agent-result.json')))}
+LOG_PATH=${JSON.stringify(str(path.join(taskDir, 'worker.log')))}
+SELECTED_AGENT=${JSON.stringify(selectedAgent)}
+PROMPT=${JSON.stringify(prompt)}
+python3 - <<'PY2'
+import json, os, datetime, pathlib
+path = pathlib.Path(os.environ['STATE_PATH'])
+obj = json.loads(path.read_text()) if path.exists() else {}
+obj['agent'] = os.environ['SELECTED_AGENT']
+obj['status'] = 'running'
+obj['updatedAt'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+obj.setdefault('logs', []).append({'at': obj['updatedAt'], 'type': 'info', 'message': 'Resuming task after user answer.'})
+path.write_text(json.dumps(obj, indent=2) + '
+')
+PY2
+if openclaw agent --agent "$SELECTED_AGENT" --message "$PROMPT" --timeout 900 --json > "$RESULT_PATH" 2> "$LOG_PATH"; then
+python3 - <<'PY2'
+import json, os, datetime, pathlib
+path = pathlib.Path(os.environ['STATE_PATH'])
+obj = json.loads(path.read_text())
+obj['agent'] = os.environ['SELECTED_AGENT']
+obj['status'] = 'completed'
+obj['updatedAt'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+obj.setdefault('logs', []).append({'at': obj['updatedAt'], 'type': 'info', 'message': f"Agent {os.environ['SELECTED_AGENT']} completed the resumed workflow task."})
+path.write_text(json.dumps(obj, indent=2) + '
+')
+PY2
+else
+python3 - <<'PY2'
+import json, os, datetime, pathlib
+path = pathlib.Path(os.environ['STATE_PATH'])
+obj = json.loads(path.read_text())
+obj['agent'] = os.environ['SELECTED_AGENT']
+obj['status'] = 'failed'
+obj['updatedAt'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+obj.setdefault('logs', []).append({'at': obj['updatedAt'], 'type': 'warning', 'message': f"Agent {os.environ['SELECTED_AGENT']} failed after user answer."})
+path.write_text(json.dumps(obj, indent=2) + '
+')
+PY2
+fi
+`;
+  await fsp.writeFile(runScript, script, 'utf8');
+  await fsp.chmod(runScript, 0o755);
+  spawn('bash', [runScript], { detached: true, stdio: 'ignore', env: process.env }).unref();
+}
+
 function serializeWorkflowTask(task) {
   const hookState = readHookTaskState(task.id);
   const hookResult = readHookTaskResult(task.id);
+  const derivedQuestion = parseWorkflowQuestion(hookResult, task);
+  const questions = Array.isArray(task.questions) ? [...task.questions] : [];
+  if (derivedQuestion && !questions.some((q) => q.question === derivedQuestion.question && !q.answer)) {
+    questions.push(derivedQuestion);
+  }
+  const waitingQuestion = questions.find((q) => q.blocking !== false && !q.answer);
   const mergedLogs = dedupeLogs([
     ...(task.logs || []),
     ...(hookState?.logs || []),
-    ...(hookResult ? [{ at: hookState?.updatedAt || new Date().toISOString(), type: 'info', message: `Agent result captured (${hookResult.length} chars).` }] : [])
+    ...(hookResult ? [{ at: hookState?.updatedAt || new Date().toISOString(), type: waitingQuestion ? 'question' : 'info', message: waitingQuestion ? `Blocking question asked: ${waitingQuestion.question}` : `Agent result captured (${hookResult.length} chars).` }] : [])
   ]);
 
   return {
@@ -472,12 +600,12 @@ function serializeWorkflowTask(task) {
     project: task.project,
     request: task.request,
     notifyChannel: task.notifyChannel,
-    status: hookState?.status || task.status,
-    activeWorker: hookState?.agent || task.activeWorker,
+    status: waitingQuestion ? 'waiting_for_user' : (hookState?.status || task.status),
+    activeWorker: waitingQuestion ? (derivedQuestion?.askedBy || hookState?.agent || task.activeWorker) : (hookState?.agent || task.activeWorker),
     createdAt: task.createdAt,
     updatedAt: hookState?.updatedAt || task.updatedAt,
     logs: mergedLogs,
-    questions: task.questions || [],
+    questions,
     handoff: {
       ...(task.handoff || {}),
       hookState,
@@ -809,13 +937,18 @@ app.post('/api/workflow/tasks/:taskId/reply', async (req, res) => {
     const questionId = String(req.body?.questionId || '');
     const answer = String(req.body?.answer || '').trim();
     if (!questionId || !answer) return res.status(400).json({ error: 'Question id and answer are required.' });
-    const question = (task.questions || []).find(item => item.id === questionId);
+    task.questions = Array.isArray(task.questions) ? task.questions : [];
+    const question = task.questions.find((item) => item.id === questionId);
     if (!question) return res.status(404).json({ error: 'Question not found.' });
     question.answer = answer;
     question.answeredAt = new Date().toISOString();
+    question.status = 'answered';
     appendWorkflowLog(task, `Reply posted to question from ${question.askedBy}.`);
+    appendWorkflowLog(task, `Answer received: ${answer}`);
+    task.status = 'resumed';
     task.updatedAt = new Date().toISOString();
     await saveUiState(state);
+    await resumeWorkflowTask(task, question, answer);
     res.json({ ok: true, task: serializeWorkflowTask(task) });
   } catch (error) {
     res.status(400).json({ error: error.message });

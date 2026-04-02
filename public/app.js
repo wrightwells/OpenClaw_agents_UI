@@ -221,13 +221,16 @@ function renderWorkflowTasks(data) {
   } else {
     qaBody.innerHTML = task.questions.map(question => `
       <tr>
-        <td>${escapeHtml(question.askedBy || 'Agent')}<div class="small">${new Date(question.askedAt).toLocaleString()}</div></td>
-        <td>${escapeHtml(question.question)}</td>
+        <td>${escapeHtml(question.askedBy || 'Agent')}<div class="small">${new Date(question.askedAt).toLocaleString()}</div><div class="small">${escapeHtml(question.responseType || 'text')}</div></td>
+        <td>${escapeHtml(question.question)}${question.details ? `<div class="small">${escapeHtml(question.details)}</div>` : ''}${question.resumeHint ? `<div class="small">Resume: ${escapeHtml(question.resumeHint)}</div>` : ''}</td>
         <td>
-          <textarea id="reply-${escapeHtml(question.id)}" placeholder="Write your answer here...">${escapeHtml(question.answer || '')}</textarea>
+          ${question.responseType === 'choice' || question.responseType === 'confirm'
+            ? `<select id="reply-${escapeHtml(question.id)}">${(question.choices || ['yes','no']).map(choice => `<option value="${escapeHtml(choice)}" ${question.answer === choice ? 'selected' : ''}>${escapeHtml(choice)}</option>`).join('')}</select>`
+            : `<textarea id="reply-${escapeHtml(question.id)}" placeholder="Write your answer here...">${escapeHtml(question.answer || '')}</textarea>`}
+          <div class="small">${question.status === 'answered' ? `Answered ${new Date(question.answeredAt).toLocaleString()}` : 'Waiting for your answer'}</div>
         </td>
         <td>
-          <button data-reply-question="${escapeHtml(question.id)}" title="Send your reply back into the workflow task log.">Post reply</button>
+          <button data-reply-question="${escapeHtml(question.id)}" title="Send your reply back into the workflow task and resume it.">${question.status === 'answered' ? 'Update answer' : 'Submit answer'}</button>
         </td>
       </tr>
     `).join('');
