@@ -427,12 +427,14 @@ async function submitWorkflowTask() {
     status.textContent = `Button clicked at ${clickedAt}
 
 Submit failed: no project selected.`;
+    window.alert('Workflow submit failed: no project selected.');
     return;
   }
   if (!request) {
     status.textContent = `Button clicked at ${clickedAt}
 
 Submit failed: request text is empty.`;
+    window.alert('Workflow submit failed: request text is empty.');
     return;
   }
 
@@ -463,6 +465,7 @@ Submit failed: ${error.message}
 
 Payload:
 ${JSON.stringify(payload, null, 2)}`;
+    window.alert(`Workflow submit failed: ${error.message}`);
   }
 }
 
