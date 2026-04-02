@@ -469,8 +469,7 @@ function extractOutputText(resultRaw) {
         if (typeof item === 'string') return item;
         if (typeof item?.text === 'string') return item.text;
         return JSON.stringify(item);
-      }).join('
-');
+      }).join('\\n');
     }
   } catch {}
   return resultRaw;
@@ -527,8 +526,7 @@ async function resumeWorkflowTask(task, question, answer) {
     question.resumeHint ? `Resume hint: ${question.resumeHint}` : '',
     '',
     'Continue the task from this answer and provide a concise useful result summary.'
-  ].filter(Boolean).join('
-');
+  ].filter(Boolean).join('\\n');
 
   const runScript = path.join(taskDir, 'resume.sh');
   const script = `#!/usr/bin/env bash
