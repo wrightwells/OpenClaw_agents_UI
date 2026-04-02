@@ -1,0 +1,13 @@
+{
+  "name": "openclaw-agents-ui",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local UI for monitoring and managing an OpenClaw multi-agent setup",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}

@@ -1,15 +1,2 @@
-# OS / editor
-.DS_Store
-Thumbs.db
-*.swp
-*.swo
-.vscode/
-.idea/
-
-# Environment / secrets
-.env
-.env.*
-*.local
-
-# Logs
-*.log
+node_modules/
+data/*.log

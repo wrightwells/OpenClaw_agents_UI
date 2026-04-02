@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OpenClaw_agents_UI</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>OpenClaw_agents_UI</h1>
+        <p class="subtle">Local UI for OpenClaw agent monitoring and prompt management</p>
+      </div>
+      <div id="globalStatus" class="status-pill">Loading…</div>
+    </header>
+
+    <nav class="menu">
+      <button data-view="dashboard" class="nav-btn active">Dashboard</button>
+      <button data-view="prompts" class="nav-btn">Prompt Editor</button>
+      <button data-view="runtime" class="nav-btn">Runtime Summary</button>
+    </nav>
+
+    <main>
+      <section id="view-dashboard" class="view active">
+        <div class="page-header">
+          <h2>Dashboard</h2>
+          <button id="refreshDashboard">Refresh</button>
+        </div>
+        <div id="dashboardSummary" class="summary-grid"></div>
+        <div id="dashboardNote" class="note"></div>
+        <div id="agentCards" class="card-grid"></div>
+      </section>
+
+      <section id="view-prompts" class="view">
+        <div class="page-header">
+          <h2>Prompt Editor</h2>
+          <div class="actions-row">
+            <button id="refreshPrompts">Reload prompts</button>
+            <button id="releaseToLive" class="primary">Release to Live</button>
+          </div>
+        </div>
+        <div id="releaseStatus" class="note"></div>
+        <div id="promptEditors" class="editor-list"></div>
+      </section>
+
+      <section id="view-runtime" class="view">
+        <div class="page-header">
+          <h2>Runtime Summary</h2>
+          <button id="refreshRuntime">Refresh</button>
+        </div>
+        <div id="runtimeFacts" class="card-grid"></div>
+        <div class="runtime-block">
+          <h3>OpenClaw status</h3>
+          <pre id="statusText"></pre>
+        </div>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
