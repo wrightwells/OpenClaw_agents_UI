@@ -335,8 +335,24 @@ async function loadDashboard() {
 
 async function loadPrompts() {
   setGlobalStatus('Loading prompts…');
-  state.prompts = await fetchJson('/api/prompts');
+  const [prompts, contextDocs] = await Promise.all([
+    fetchJson('/api/prompts'),
+    fetchJson('/api/context-docs')
+  ]);
+  state.prompts = prompts;
   renderPrompts(state.prompts);
+
+  const projectSelect = document.getElementById('promptProjectSelect');
+  if (projectSelect) {
+    projectSelect.innerHTML = (contextDocs.projects || []).length
+      ? contextDocs.projects.map(project => `<option value="${escapeHtml(project.name)}" ${project.name === contextDocs.selectedProject ? 'selected' : ''}>${escapeHtml(project.name)}</option>`).join('')
+      : '<option value="">No projects found</option>';
+  }
+  const promptKickoff = document.getElementById('promptKickoffText');
+  if (promptKickoff) {
+    promptKickoff.value = contextDocs.kickoffPrompt || '';
+  }
+
   setGlobalStatus('Prompt editor ready');
 }
 
