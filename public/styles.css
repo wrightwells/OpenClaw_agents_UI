@@ -32,7 +32,7 @@ main { padding:1.5rem; }
 .badge.estimated { background:#46380b; color:#ffd970; }
 .badge.unavailable { background:#3a1c28; color:#ffb0c2; }
 textarea { width:100%; min-height:260px; resize:vertical; background:#0a1126; color:#eef2ff; border:1px solid #31406a; border-radius:12px; padding:1rem; font-family: ui-monospace, SFMono-Regular, monospace; }
-#kickoffPrompt, #workflowRequest { min-height: 180px; }
+#kickoffPrompt, #workflowRequest, #promptKickoffText { min-height: 180px; }
 .actions-row { display:flex; gap:.75rem; flex-wrap:wrap; align-items:center; }
 pre { white-space:pre-wrap; word-break:break-word; background:#08101f; padding:1rem; border-radius:12px; border:1px solid #23304f; overflow:auto; }
 .status-pill { background:#16213f; border:1px solid #31406a; padding:.55rem .8rem; border-radius:999px; color:#dbe5ff; }

@@ -464,6 +464,8 @@ function setupActions() {
   document.getElementById('generateKickoffBtn').addEventListener('click', generateKickoffPrompt);
   document.getElementById('copyKickoffBtn').addEventListener('click', copyKickoffPrompt);
   document.getElementById('initRepoBtn').addEventListener('click', triggerRepoInit);
+  document.getElementById('generatePromptKickoffBtn').addEventListener('click', generatePromptEditorKickoff);
+  document.getElementById('copyPromptKickoffBtn').addEventListener('click', copyPromptEditorKickoff);
   document.getElementById('submitWorkflowTask').addEventListener('click', submitWorkflowTask);
   document.getElementById('selectWorkflowTask').addEventListener('click', selectWorkflowTask);
   document.getElementById('homeToWorkflow').addEventListener('click', () => openView('workflow'));

@@ -141,6 +141,22 @@
             <button id="releaseToLive" class="primary" title="Sync saved prompt templates into live workspaces and restart OpenClaw.">Release to Live + Restart OpenClaw</button>
           </div>
         </div>
+
+        <div class="panel">
+          <div class="page-header slim">
+            <div>
+              <h3>Kickoff Prompt</h3>
+              <div class="small">Project-aware startup prompt for the context you want these prompt edits to align with.</div>
+            </div>
+            <div class="actions-row">
+              <select id="promptProjectSelect" title="Choose which project context to use for the kickoff prompt."></select>
+              <button id="generatePromptKickoffBtn" title="Generate the kickoff prompt for the selected project.">Generate prompt</button>
+              <button id="copyPromptKickoffBtn" title="Copy the generated kickoff prompt to the clipboard.">Copy prompt</button>
+            </div>
+          </div>
+          <textarea id="promptKickoffText" readonly></textarea>
+        </div>
+
         <div id="releaseStatus" class="note"></div>
         <div id="promptEditors" class="editor-list"></div>
       </section>
