@@ -156,16 +156,23 @@ function renderWorkflowStatus(task) {
   const spinner = document.getElementById('workflowSpinner');
   if (!task) {
     bar.className = 'workflow-status idle';
-    worker.textContent = 'No active task';
+    worker.textContent = 'Waiting for next task';
     meta.textContent = 'Submit or select a task to begin.';
     spinner.classList.add('hidden');
     return;
   }
-  const active = ['submitted', 'awaiting-manual-handoff', 'running', 'pending'].includes(task.status);
+  const active = ['submitted', 'awaiting-manual-handoff', 'running', 'pending', 'queued'].includes(task.status);
   bar.className = `workflow-status ${active ? 'active' : 'idle'}`;
-  worker.textContent = `${task.activeWorker || 'HAL'} working on ${task.project}`;
-  meta.textContent = `Status: ${task.status} · Updated ${new Date(task.updatedAt || task.createdAt).toLocaleString()} · Remote updates: ${task.notifyChannel}`;
-  spinner.classList.toggle('hidden', !active);
+  if (active) {
+    worker.textContent = `${task.activeWorker || 'HAL'} working on ${task.project}`;
+    meta.textContent = `Status: ${task.status} · Updated ${new Date(task.updatedAt || task.createdAt).toLocaleString()} · Remote updates: ${task.notifyChannel}`;
+    spinner.classList.remove('hidden');
+  } else {
+    const completedBy = task.activeWorker || 'HAL';
+    worker.textContent = 'Waiting for next task';
+    meta.textContent = `Last completed by ${completedBy} · ${task.project} · ${new Date(task.updatedAt || task.createdAt).toLocaleString()}`;
+    spinner.classList.add('hidden');
+  }
 }
 
 function renderWorkflowTasks(data) {
