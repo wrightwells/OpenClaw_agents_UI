@@ -23,6 +23,7 @@ const CONTEXT_DOC_FILENAMES = ['current-status.md', 'decisions.md', 'next-steps.
 const KICKOFF_SCRIPT = path.join(DEV_CONTEXT_ROOT, 'print-kickoff-prompt.sh');
 const PROJECT_INIT_HOOK = path.join(DEV_CONTEXT_ROOT, 'hooks', 'init-project-repo.sh');
 const WORKFLOW_HOOK = path.join(DEV_CONTEXT_ROOT, 'hooks', 'submit-workflow-task.sh');
+const WORKFLOW_TASKS_ROOT = path.join(DEV_CONTEXT_ROOT, 'workflow-tasks');
 const AGENT_ORDER = ['main', 'alpha', 'delta', 'charlie', 'tango', 'romeo', 'india'];
 
 app.use(express.json({ limit: '2mb' }));
