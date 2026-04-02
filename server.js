@@ -396,7 +396,7 @@ async function triggerWorkflowTask(task) {
       task.handoff.status = 'hook-executed';
       task.handoff.stdout = result.stdout || '';
       task.handoff.stderr = result.stderr || '';
-      task.status = 'submitted';
+      task.status = 'running';
       task.activeWorker = 'HAL';
       appendWorkflowLog(task, `Workflow hook executed from ${WORKFLOW_HOOK}.`);
       if (result.stdout?.trim()) appendWorkflowLog(task, result.stdout.trim());
