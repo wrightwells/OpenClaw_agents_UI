@@ -542,6 +542,8 @@ async function main() {
   setGlobalStatus('Landing page ready');
 }
 
+window.submitWorkflowTask = submitWorkflowTask;
+
 main().catch(error => {
   setGlobalStatus(`Startup failed: ${error.message}`);
 });
