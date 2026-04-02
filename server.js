@@ -419,19 +419,63 @@ async function triggerWorkflowTask(task) {
   appendWorkflowLog(task, `No workflow hook found at ${WORKFLOW_HOOK}; manual HAL orchestration handoff required.`, 'warning');
 }
 
+function readHookTaskState(taskId) {
+  const statePath = path.join(WORKFLOW_TASKS_ROOT, taskId, 'state.json');
+  try {
+    if (!fs.existsSync(statePath)) return null;
+    return JSON.parse(fs.readFileSync(statePath, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+function readHookTaskResult(taskId) {
+  const resultPath = path.join(WORKFLOW_TASKS_ROOT, taskId, 'agent-result.json');
+  try {
+    if (!fs.existsSync(resultPath)) return null;
+    const raw = fs.readFileSync(resultPath, 'utf8').trim();
+    if (!raw) return null;
+    return raw.slice(0, 4000);
+  } catch {
+    return null;
+  }
+}
+
+function dedupeLogs(logs) {
+  const seen = new Set();
+  return (logs || []).filter((log) => {
+    const key = `${log.at}|${log.type}|${log.message}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 function serializeWorkflowTask(task) {
+  const hookState = readHookTaskState(task.id);
+  const hookResult = readHookTaskResult(task.id);
+  const mergedLogs = dedupeLogs([
+    ...(task.logs || []),
+    ...(hookState?.logs || []),
+    ...(hookResult ? [{ at: hookState?.updatedAt || new Date().toISOString(), type: 'info', message: `Agent result captured (${hookResult.length} chars).` }] : [])
+  ]);
+
   return {
     id: task.id,
     project: task.project,
     request: task.request,
     notifyChannel: task.notifyChannel,
-    status: task.status,
-    activeWorker: task.activeWorker,
+    status: hookState?.status || task.status,
+    activeWorker: hookState?.agent || task.activeWorker,
     createdAt: task.createdAt,
-    updatedAt: task.updatedAt,
-    logs: task.logs || [],
+    updatedAt: hookState?.updatedAt || task.updatedAt,
+    logs: mergedLogs,
     questions: task.questions || [],
-    handoff: task.handoff || null
+    handoff: {
+      ...(task.handoff || {}),
+      hookState,
+      resultPreview: hookResult
+    }
   };
 }
 
