@@ -3,7 +3,9 @@ const state = {
   prompts: null,
   runtime: null,
   contextDocs: null,
-  promptDrafts: {}
+  workflow: null,
+  promptDrafts: {},
+  workflowPollTimer: null,
 };
 
 function setGlobalStatus(text) {
@@ -105,9 +107,7 @@ function renderPrompts(data) {
       state.promptDrafts[agentId] = textarea.value;
       const prompt = state.prompts.prompts.find(item => item.agentId === agentId);
       const status = document.getElementById(`save-status-${agentId}`);
-      if (status) {
-        status.textContent = textarea.value === prompt.content ? '' : 'Unsaved local edits';
-      }
+      if (status) status.textContent = textarea.value === prompt.content ? '' : 'Unsaved local edits';
     });
   });
 
@@ -147,6 +147,81 @@ function renderRuntime(data) {
     </div>
   `).join('');
   document.getElementById('statusText').textContent = data.statusText || 'No status available';
+}
+
+function renderWorkflowStatus(task) {
+  const bar = document.getElementById('workflowStatusBar');
+  const worker = document.getElementById('workflowWorker');
+  const meta = document.getElementById('workflowStatusMeta');
+  const spinner = document.getElementById('workflowSpinner');
+  if (!task) {
+    bar.className = 'workflow-status idle';
+    worker.textContent = 'No active task';
+    meta.textContent = 'Submit or select a task to begin.';
+    spinner.classList.add('hidden');
+    return;
+  }
+  const active = ['submitted', 'awaiting-manual-handoff', 'running', 'pending'].includes(task.status);
+  bar.className = `workflow-status ${active ? 'active' : 'idle'}`;
+  worker.textContent = `${task.activeWorker || 'HAL'} working on ${task.project}`;
+  meta.textContent = `Status: ${task.status} · Updated ${new Date(task.updatedAt || task.createdAt).toLocaleString()} · Remote updates: ${task.notifyChannel}`;
+  spinner.classList.toggle('hidden', !active);
+}
+
+function renderWorkflowTasks(data) {
+  const select = document.getElementById('workflowTaskSelect');
+  const projectSelect = document.getElementById('workflowProjectSelect');
+  const projects = data.projects || [];
+  projectSelect.innerHTML = projects.length
+    ? projects.map(project => `<option value="${escapeHtml(project.name)}" ${project.name === data.selectedProject ? 'selected' : ''}>${escapeHtml(project.name)}</option>`).join('')
+    : '<option value="">No projects available</option>';
+
+  const tasks = data.tasks || [];
+  select.innerHTML = tasks.length
+    ? tasks.map(task => `<option value="${escapeHtml(task.id)}" ${task.id === data.selectedTaskId ? 'selected' : ''}>${escapeHtml(task.project)} · ${escapeHtml(task.status)} · ${new Date(task.createdAt).toLocaleString()}</option>`).join('')
+    : '<option value="">No workflow tasks yet</option>';
+
+  const task = data.selectedTask;
+  renderWorkflowStatus(task);
+  document.getElementById('workflowTaskMeta').textContent = task
+    ? `${task.project} · ${task.notifyChannel} · created ${new Date(task.createdAt).toLocaleString()}`
+    : 'No task selected.';
+
+  const output = document.getElementById('workflowOutput');
+  output.innerHTML = task?.logs?.length
+    ? task.logs.map(line => `<div class="log-line log-${escapeHtml(line.type || 'info')}"><span class="log-time">${new Date(line.at).toLocaleTimeString()}</span>${escapeHtml(line.message)}</div>`).join('')
+    : '<div class="small">No output yet for this task.</div>';
+
+  const qaBody = document.getElementById('workflowQaBody');
+  if (!task?.questions?.length) {
+    qaBody.innerHTML = '<tr><td colspan="4" class="small">No questions yet.</td></tr>';
+  } else {
+    qaBody.innerHTML = task.questions.map(question => `
+      <tr>
+        <td>${escapeHtml(question.askedBy || 'Agent')}<div class="small">${new Date(question.askedAt).toLocaleString()}</div></td>
+        <td>${escapeHtml(question.question)}</td>
+        <td>
+          <textarea id="reply-${escapeHtml(question.id)}" placeholder="Write your answer here...">${escapeHtml(question.answer || '')}</textarea>
+        </td>
+        <td>
+          <button data-reply-question="${escapeHtml(question.id)}" title="Send your reply back into the workflow task log.">Post reply</button>
+        </td>
+      </tr>
+    `).join('');
+    qaBody.querySelectorAll('[data-reply-question]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const questionId = btn.getAttribute('data-reply-question');
+        const answer = document.getElementById(`reply-${questionId}`).value;
+        if (!state.workflow?.selectedTaskId) return;
+        await fetchJson(`/api/workflow/tasks/${encodeURIComponent(state.workflow.selectedTaskId)}/reply`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ questionId, answer })
+        });
+        await loadWorkflow();
+      });
+    });
+  }
 }
 
 function updateProjectSelects(projects, selectedProject) {
@@ -231,11 +306,19 @@ async function loadContextDocs(project = '') {
   setGlobalStatus('Context docs ready');
 }
 
+async function loadWorkflow(taskId = '') {
+  setGlobalStatus('Loading workflow…');
+  const params = new URLSearchParams();
+  if (taskId) params.set('taskId', taskId);
+  const query = params.toString() ? `?${params.toString()}` : '';
+  state.workflow = await fetchJson(`/api/workflow${query}`);
+  renderWorkflowTasks(state.workflow);
+  setGlobalStatus('Workflow ready');
+}
+
 async function releaseToLive() {
   const status = document.getElementById('releaseStatus');
-  if (hasUnsavedPromptChanges() && !window.confirm('Some prompt editors have unsaved changes in the browser. Release will only use what is already saved to disk. Continue?')) {
-    return;
-  }
+  if (hasUnsavedPromptChanges() && !window.confirm('Some prompt editors have unsaved changes in the browser. Release will only use what is already saved to disk. Continue?')) return;
   status.textContent = 'Running release to live and restarting OpenClaw…';
   try {
     const result = await fetchJson('/api/release', { method: 'POST' });
@@ -253,7 +336,6 @@ async function createProject() {
   const status = document.getElementById('createProjectStatus');
   status.classList.remove('hidden');
   status.textContent = 'Creating project…';
-
   try {
     const result = await fetchJson('/api/context-projects', {
       method: 'POST',
@@ -265,6 +347,7 @@ async function createProject() {
     status.textContent = `Created project ${result.selectedProject}${result.copiedFrom ? ` by copying docs from ${result.copiedFrom}` : ' from blank templates'}.`;
     renderRepoInitStatus('repoInitStatus', result.repoInit);
     await loadContextDocs(result.selectedProject);
+    await loadWorkflow();
   } catch (error) {
     status.textContent = `Create failed: ${error.message}`;
   }
@@ -279,37 +362,71 @@ async function selectProject() {
     body: JSON.stringify({ project })
   });
   await loadContextDocs(project);
+  await loadWorkflow();
 }
 
 async function generateKickoffPrompt() {
   const project = document.getElementById('projectSelect').value || state.contextDocs?.selectedProject;
-  if (!project) {
-    window.alert('Select or create a project first.');
-    return;
-  }
+  if (!project) return window.alert('Select or create a project first.');
   const result = await fetchJson(`/api/context-projects/${encodeURIComponent(project)}/kickoff`, { method: 'POST' });
   document.getElementById('kickoffPrompt').value = result.kickoffPrompt || '';
 }
 
 async function copyKickoffPrompt() {
   const textarea = document.getElementById('kickoffPrompt');
-  if (!textarea.value.trim()) {
-    window.alert('Generate a kickoff prompt first.');
-    return;
-  }
+  if (!textarea.value.trim()) return window.alert('Generate a kickoff prompt first.');
   await navigator.clipboard.writeText(textarea.value);
   setGlobalStatus('Kickoff prompt copied to clipboard');
 }
 
 async function triggerRepoInit() {
   const project = document.getElementById('projectSelect').value || state.contextDocs?.selectedProject;
-  if (!project) {
-    window.alert('Select or create a project first.');
-    return;
-  }
+  if (!project) return window.alert('Select or create a project first.');
   renderRepoInitStatus('repoInitStatus', { status: 'pending', note: 'Submitting Alpha repo-init handoff…' });
   const result = await fetchJson(`/api/context-projects/${encodeURIComponent(project)}/init-repo`, { method: 'POST' });
   renderRepoInitStatus('repoInitStatus', result.repoInit);
+}
+
+async function submitWorkflowTask() {
+  const project = document.getElementById('workflowProjectSelect').value;
+  const request = document.getElementById('workflowRequest').value.trim();
+  const notifyChannel = document.querySelector('input[name="workflowNotify"]:checked')?.value || 'none';
+  const status = document.getElementById('workflowSubmitStatus');
+  status.classList.remove('hidden');
+  status.textContent = 'Submitting task…';
+  try {
+    const result = await fetchJson('/api/workflow/tasks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project, request, notifyChannel })
+    });
+    document.getElementById('workflowRequest').value = '';
+    status.textContent = `Task submitted for ${result.task.project}. Current worker: ${result.task.activeWorker}.`;
+    await loadWorkflow(result.task.id);
+  } catch (error) {
+    status.textContent = `Submit failed: ${error.message}`;
+  }
+}
+
+async function selectWorkflowTask() {
+  const taskId = document.getElementById('workflowTaskSelect').value;
+  if (!taskId) return;
+  await fetchJson(`/api/workflow/tasks/${encodeURIComponent(taskId)}/select`, { method: 'POST' });
+  await loadWorkflow(taskId);
+}
+
+function setWorkflowPolling(enabled) {
+  if (state.workflowPollTimer) {
+    clearInterval(state.workflowPollTimer);
+    state.workflowPollTimer = null;
+  }
+  if (enabled) {
+    state.workflowPollTimer = setInterval(() => {
+      if (document.getElementById('view-workflow').classList.contains('active')) {
+        loadWorkflow(state.workflow?.selectedTaskId).catch(() => {});
+      }
+    }, 5000);
+  }
 }
 
 async function openView(view) {
@@ -318,11 +435,13 @@ async function openView(view) {
     if (!ok) return;
   }
   switchView(view);
+  setWorkflowPolling(view === 'workflow');
+  if (view === 'home') setGlobalStatus('Landing page ready');
   if (view === 'dashboard') await loadDashboard();
+  if (view === 'workflow') await loadWorkflow(state.workflow?.selectedTaskId || '');
   if (view === 'prompts') await loadPrompts();
   if (view === 'runtime') await loadRuntime();
   if (view === 'context') await loadContextDocs();
-  if (view === 'home') setGlobalStatus('Landing page ready');
 }
 
 function setupNav() {
@@ -335,6 +454,7 @@ function setupNav() {
 
 function setupActions() {
   document.getElementById('refreshDashboard').addEventListener('click', loadDashboard);
+  document.getElementById('refreshWorkflow').addEventListener('click', () => loadWorkflow(state.workflow?.selectedTaskId || ''));
   document.getElementById('refreshPrompts').addEventListener('click', loadPrompts);
   document.getElementById('refreshRuntime').addEventListener('click', loadRuntime);
   document.getElementById('refreshContext').addEventListener('click', () => loadContextDocs(document.getElementById('projectSelect').value));
@@ -344,6 +464,9 @@ function setupActions() {
   document.getElementById('generateKickoffBtn').addEventListener('click', generateKickoffPrompt);
   document.getElementById('copyKickoffBtn').addEventListener('click', copyKickoffPrompt);
   document.getElementById('initRepoBtn').addEventListener('click', triggerRepoInit);
+  document.getElementById('submitWorkflowTask').addEventListener('click', submitWorkflowTask);
+  document.getElementById('selectWorkflowTask').addEventListener('click', selectWorkflowTask);
+  document.getElementById('homeToWorkflow').addEventListener('click', () => openView('workflow'));
   document.getElementById('homeToContext').addEventListener('click', () => openView('context'));
   document.getElementById('homeToPrompts').addEventListener('click', () => openView('prompts'));
   document.getElementById('homeToRuntime').addEventListener('click', () => openView('runtime'));

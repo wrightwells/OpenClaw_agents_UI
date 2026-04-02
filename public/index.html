@@ -10,7 +10,7 @@
     <header class="topbar">
       <div>
         <h1>OpenClaw Agents UI</h1>
-        <p class="subtle">Local UI for OpenClaw agent monitoring, prompt management, and project working context</p>
+        <p class="subtle">Local UI for OpenClaw agent monitoring, orchestration, prompt management, and project working context</p>
       </div>
       <div id="globalStatus" class="status-pill">Loading…</div>
     </header>
@@ -18,6 +18,7 @@
     <nav class="menu">
       <button data-view="home" class="nav-btn active" title="Open the landing page and quick-start overview.">Home</button>
       <button data-view="dashboard" class="nav-btn" title="View per-agent usage and cost status for day, week, and month.">Dashboard</button>
+      <button data-view="workflow" class="nav-btn" title="Submit project workflow tasks, watch status, and answer agent questions.">Workflow</button>
       <button data-view="prompts" class="nav-btn" title="Edit agent template prompts, save them, and release them live.">Prompt Editor</button>
       <button data-view="runtime" class="nav-btn" title="Inspect models, workspaces, and current OpenClaw runtime status.">Runtime Summary</button>
       <button data-view="context" class="nav-btn" title="Manage project context docs, kickoff prompts, and repo-init handoff.">Working Context</button>
@@ -29,9 +30,10 @@
           <div class="hero-copy">
             <div class="eyebrow">OpenClaw Team Console</div>
             <h2>Coding Tomorrows Legacy Today</h2>
-            <p class="hero-text">This is the operator home for your OpenClaw team. Use the menus above to move into agent monitoring, prompt release, runtime inspection, and project-scoped working context.</p>
+            <p class="hero-text">This is the operator home for your OpenClaw team. Use the menus above to move into orchestration, agent monitoring, prompt release, runtime inspection, and project-scoped working context.</p>
             <div class="actions-row">
-              <button id="homeToContext" class="primary" title="Jump straight to project working context management.">Open Working Context</button>
+              <button id="homeToWorkflow" class="primary" title="Jump straight to project workflow orchestration.">Open Workflow</button>
+              <button id="homeToContext" title="Jump straight to project working context management.">Open Working Context</button>
               <button id="homeToPrompts" title="Jump to the prompt editor for agent template changes.">Open Prompt Editor</button>
               <button id="homeToRuntime" title="Jump to runtime facts and the current OpenClaw status output.">Open Runtime Summary</button>
             </div>
@@ -50,6 +52,85 @@
         <div id="dashboardSummary" class="summary-grid"></div>
         <div id="dashboardNote" class="note"></div>
         <div id="agentCards" class="stack-list"></div>
+      </section>
+
+      <section id="view-workflow" class="view">
+        <div class="page-header">
+          <h2>Workflow</h2>
+          <button id="refreshWorkflow" title="Reload workflow tasks, logs, and questions for the selected project.">Refresh</button>
+        </div>
+
+        <div class="workflow-layout">
+          <div class="panel">
+            <h3>Submit request</h3>
+            <label class="field-label" for="workflowProjectSelect">Project</label>
+            <select id="workflowProjectSelect"></select>
+
+            <label class="field-label" for="workflowRequest">Request</label>
+            <textarea id="workflowRequest" placeholder="Describe the update you want HAL to orchestrate for the selected project."></textarea>
+
+            <div class="field-label">Remote updates</div>
+            <div class="radio-row">
+              <label><input type="radio" name="workflowNotify" value="none" checked /> No remote updates</label>
+              <label><input type="radio" name="workflowNotify" value="telegram" /> Send updates to Telegram</label>
+            </div>
+
+            <div class="actions-row">
+              <button id="submitWorkflowTask" class="primary" title="Submit this project-scoped workflow task for HAL orchestration.">Submit request</button>
+            </div>
+            <div id="workflowSubmitStatus" class="note hidden"></div>
+          </div>
+
+          <div class="panel">
+            <h3>Current task</h3>
+            <div id="workflowStatusBar" class="workflow-status idle">
+              <div class="workflow-status-main">
+                <span id="workflowSpinner" class="spinner hidden"></span>
+                <strong id="workflowWorker">No active task</strong>
+              </div>
+              <div id="workflowStatusMeta" class="small">Submit or select a task to begin.</div>
+            </div>
+
+            <label class="field-label" for="workflowTaskSelect">Task log</label>
+            <div class="actions-row">
+              <select id="workflowTaskSelect"></select>
+              <button id="selectWorkflowTask" title="Load the selected workflow task and its current log/questions.">Load task</button>
+            </div>
+            <div id="workflowTaskMeta" class="small"></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="page-header slim">
+            <div>
+              <h3>Output</h3>
+              <div class="small">Live-ish local task log for the selected workflow item.</div>
+            </div>
+          </div>
+          <div id="workflowOutput" class="log-output"></div>
+        </div>
+
+        <div class="panel">
+          <div class="page-header slim">
+            <div>
+              <h3>Questions & Answers</h3>
+              <div class="small">Reply to any questions raised during the task.</div>
+            </div>
+          </div>
+          <div class="qa-table-wrap">
+            <table class="qa-table">
+              <thead>
+                <tr>
+                  <th>Asked by</th>
+                  <th>Question</th>
+                  <th>Answer</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="workflowQaBody"></tbody>
+            </table>
+          </div>
+        </div>
       </section>
 
       <section id="view-prompts" class="view">

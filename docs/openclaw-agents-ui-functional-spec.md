@@ -4,11 +4,13 @@
 
 OpenClaw_agents_UI is a locally run web application for monitoring and maintaining a small OpenClaw multi-agent setup.
 
-The application must provide four main functions:
-1. A default dashboard showing per-agent usage/cost summaries over recent time windows.
-2. A prompt management page for editing agent prompt source files and releasing them to live OpenClaw workspaces.
-3. A runtime summary page showing current agent/runtime facts such as model assignment and other operational status details.
-4. A working-context page for browsing per-project continuity documents and creating/selecting project context workspaces.
+The application must provide five main functions:
+1. A landing page for the operator with menu access to the core areas.
+2. A dashboard showing per-agent usage/cost summaries over recent time windows.
+3. A workflow page for project-scoped task submission, orchestration status, task logs, remote-update preference, and agent Q&A.
+4. A prompt management page for editing agent prompt source files and releasing them to live OpenClaw workspaces.
+5. A runtime summary page showing current agent/runtime facts such as model assignment and other operational status details.
+6. A working-context page for browsing per-project continuity documents and creating/selecting project context workspaces.
 
 This specification is functional only. It defines user-visible behaviour, data expectations, constraints, and acceptance criteria. It does **not** prescribe implementation details such as framework, schema technology, or deployment internals.
 
@@ -18,7 +20,8 @@ This specification is functional only. It defines user-visible behaviour, data e
 
 ### In scope
 - A website that runs locally on the host machine.
-- Four pages with a persistent menu/navigation system.
+- Six pages with a persistent menu/navigation system.
+- A workflow/orchestration task surface for project-scoped requests.
 - A project-scoped local working-context folder structure under `~/.openclaw/dev-context/projects/`.
 - Read/write access to local project files required by the UI.
 - Local-only persistence for any application state, cached metrics, draft edits, or remembered preferences.
@@ -88,11 +91,12 @@ The operator/owner of the local OpenClaw installation.
 
 The application must provide:
 1. A local web UI with a menu system.
-2. Exactly four top-level pages.
+2. Exactly six top-level pages.
 3. Local persistence only.
 4. Safe handling of file edits and release actions.
 5. Project-scoped working-context management under `~/.openclaw/dev-context/projects/`.
-6. A consistent distinction between:
+6. A project-scoped workflow/orchestration surface for HAL-led task handling.
+7. A consistent distinction between:
    - actual measured values,
    - estimated values,
    - unavailable values.
@@ -101,22 +105,43 @@ The application must provide:
 
 ## 6. Navigation / Information Architecture
 
-The UI must expose four menu items that are always reachable:
+The UI must expose six menu items that are always reachable:
 
-1. **Dashboard** (default landing page)
-2. **Prompt Editor**
-3. **Runtime Summary**
-4. **Working Context**
+1. **Home** (default landing page)
+2. **Dashboard**
+3. **Workflow**
+4. **Prompt Editor**
+5. **Runtime Summary**
+6. **Working Context**
 
 ### Navigation requirements
 - The menu must be visible on every page.
 - The currently active page must be visually indicated.
-- The default route must open the Dashboard.
+- The default route must open the Home landing page.
 - Navigation must not discard unsaved prompt edits without a warning.
 
 ---
 
-## 7. Page 1 — Dashboard (Default)
+## 7. Page 1 — Home (Default Landing Page)
+
+## 7.1 Purpose
+Provide an operator landing page that introduces the app, shows the core navigation clearly, and acts as the default entry point.
+
+## 7.2 Required behaviour
+The landing page must:
+- load by default
+- keep the main menu visible
+- include branded headline text and supporting copy
+- support a hero image area or image slot
+- provide quick actions into key app areas such as Workflow, Prompt Editor, Runtime Summary, or Working Context
+
+## 7.3 Image handling
+If a specific local landing-page image asset is available, the UI should display it.
+If no image asset is available, the page must still render cleanly with a placeholder image area rather than breaking the layout.
+
+---
+
+## 8. Page 2 — Dashboard
 
 ## 7.1 Purpose
 Provide a per-agent summary of recent usage and associated cost for:
@@ -243,7 +268,58 @@ This does not require a database; local file persistence is sufficient.
 
 ---
 
-## 9. Page 2 — Prompt Editor
+## 9. Page 3 — Workflow
+
+## 9.1 Purpose
+Provide a project-scoped orchestration page where the operator can submit a new request for HAL to coordinate, monitor the currently active worker, review task output/log updates, choose whether remote updates should go to Telegram, and answer agent questions.
+
+## 9.2 Project selection
+The Workflow page must let the operator choose the target project from a dropdown sourced from the Working Context project list.
+The currently selected project should be obvious in the UI and used as the scope for new task submissions.
+
+## 9.3 Request submission
+The page must include a request-entry section where the operator can type and submit a task request for the selected project.
+Examples include:
+- functional-spec updates
+- code iteration requests
+- design refinement requests
+- bug-fix tasks
+
+The request must be stored locally and treated as a project-scoped workflow item.
+
+## 9.4 Worker status bar
+The page must show a visible status bar for the active task indicating at minimum:
+- current task status
+- which team member is currently working on it, such as HAL, Alpha, Delta, Charlie, Tango, Romeo, or India
+- latest update time if known
+
+## 9.5 Output/log area
+The page must include an output/log section for the active task.
+This log should show step-by-step status messages or progress updates for the current task.
+If the task is still active, the UI should show a moving or spinning visual indicator so the operator can tell updates are still expected.
+
+## 9.6 Remote update preference
+The page must include a radio-button choice controlling whether long-running updates should be sent to Telegram.
+At minimum the UI must support:
+- `No remote updates`
+- `Send updates to Telegram`
+
+If end-to-end Telegram delivery is not fully implemented in the first version, the preference must still be captured and attached to the task metadata or handoff state so the workflow remains forward-compatible.
+
+## 9.7 Q&A table
+The page must include a question-and-answer area in table form.
+This area must:
+- show any questions coming from the agent/team for the active task
+- allow the operator to enter and submit a reply for each question
+- preserve both the question and the answer in local task state
+
+## 9.8 Local-first orchestration requirement
+The workflow system must be operable locally even if deep live agent orchestration is not fully automatic in the first version.
+It is acceptable for the first version to support a local-first handoff/logging model as long as the UI clearly represents task state, assigned worker, log output, and Q&A.
+
+---
+
+## 10. Page 4 — Prompt Editor
 
 ## 9.1 Purpose
 Provide a single place to review and edit the agent prompt source files currently stored in the repo’s `agent-templates/` directory, with separate save/update controls per agent and a top-level release-to-live action.
